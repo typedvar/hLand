@@ -1,0 +1,80 @@
+Preservation properties:
+
+Program does not change
+
+The stack size increases either by 1 or decreases by 1 or nothing happens from one step to the next
+    All the action happens at the top and everything below it is unchanged
+
+The PC remains in the address space of the program
+
+The length of the list is bounded for value, parameter and return value registers
+
+Progress properties:
+
+If a program is well typed then at each step either the machine state changes or remains same (in which case it has halted).
+
+Determinism:
+
+There is one and only successor state.
+
+
+1. Two examples different versions of the same program (fact - recursive/iterative) and prove it to be same
+2. Two functions are equal if given enough equal arguments, they give you equal results if they give results.
+
+- Define two machine states as identical G-Machine/D-Machine
+- When does two gmachine/two dmachine states are same
+- When are two observable states same
+
+these are configurations that are reachable from a compilation of a base type
+
+-----------------------------------------------------------------------------
+
+1. Translation from G-Code to Dalvik code
+
+2. For any H program if run the G Machine image of the H program and if you get an output O then the dalvik version of the program on the translated input will give an output O', such that O and O' agree.
+
+3. Definition of agree:
+    If O is a primitive type then O' is the same primitive type
+    If O is a closure then given sufficient arguments A[] such that it terminates with an of primitive type O", then the O" and O' also agree.
+    If the Dalvik machine ran then the other machine ran too.
+
+4. What are the observables - define what are observables in your machine for integer type programs
+
+5. Generalization to pack (constructed types)
+
+To prove: 
+    For all H language programs of type int and it had terminated - the translated G machine code when run if it terminates yields an integer - and further when translated into Dalvik, the D-machine terminates with the same integer
+    Extend it for non-primitive
+    Extend it for pack type
+    
+Intensional equality
+Extensional equality
+
+Paper Title:
+What Simon says Maybe (Right)
+  
+
+THEOREM TO PROVE:
+If there is a G-Machine state:
+
+a. Define the notion of equivalence between G-Machine states
+    What is observable
+    The G-Machine state stands for a computation that either:
+        1. does not terminate, 
+        2. or it is deadlocked, 
+        3. or it has terminated with an integer value at the top of the stack.
+        
+    - Theorem for deadlock - every G-Machine program that returns a integer value, and any number of steps of the program (these are called
+    legitatmate G-Machine configurations). Theorem - legit G-Machine configuration never deadlock and if they terminate they do so with 
+    a single integer on the stack - or they do not terminate.
+    
+    Notion of equivalence between G-Machine states:
+    1. If S_a is deadlocked, and S_b is deadlocked, then Sa is equivalent to Sb (irrespective of whatever else)
+    2. If S_a has terminated with Val_a on stack, and Sb has terminated with Val_b on stack, then S_a is equivalent to S_b iff Val_a is equivalent to Val_b
+    3. If S_a after execution of at least one step and reaches state S_a', and S_b after execution of zero or more steps reached S_b', then S_a is equivalent to S_b iff S_a' is equivalent to S_b'. 
+    
+    4. 
+    
+b. Define the notion of equivalence between Dalvik VM states
+c. Define the terminal  
+

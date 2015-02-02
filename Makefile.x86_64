@@ -1,0 +1,12 @@
+COQBIN=/usr/bin
+HASKELLBIN=/usr/bin
+COQDOC=$(COQBIN)/coqdoc
+COQC=$(COQBIN)/coqc
+GHC=$(HASKELLBIN)/ghc
+
+PYTHON=/usr/bin/python3.3
+MOVE=/bin/mv
+RM=/bin/rm
+PDFLATEX=/usr/bin/pdflatex
+LATEX=/usr/bin/latex
+BIBTEX=/usr/bin/bibtex

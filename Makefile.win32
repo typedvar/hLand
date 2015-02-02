@@ -1,0 +1,14 @@
+COQBIN=D:/apps_x86/coq/bin
+HASKELLBIN=D:/apps_x86/Haskell Platform/2013.2.0.0/bin
+COQDOC=$(COQBIN)/coqdoc.exe
+COQC=$(COQBIN)/coqc.exe
+GHC=$(HASKELLBIN)/ghc.exe
+PYTHON=D:/apps/Python34/python.exe
+UNIX_TOOLS_BIN=D:/apps_x86/GnuWin32/bin
+MOVE=$(UNIX_TOOLS_BIN)/mv.exe
+RM=$(UNIX_TOOLS_BIN)/rm.exe
+PDFLATEX="D:/apps_x86/MiKTeX 2.9/miktex/bin/pdflatex.exe"
+LATEX="D:/apps_x86/MiKTeX 2.9/miktex/bin/latex.exe"
+BIBTEX="D:/apps_x86/MiKTeX 2.9/miktex/bin/bibtex.exe"
+LATEX_MK="D:/apps_x86/MiKTeX 2.9/miktex/bin/latexmk.exe"
+PERL="D:/apps/strawberry/perl/bin/perl.exe"
