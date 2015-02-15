@@ -13,16 +13,15 @@ proceeds as follows:
   \item Process instruction based on rules defined in \S\ref{gm:transitions}
   \item Loop till $\kappa$ is empty
 \end{itemize}
-
 %
-    For simplicity of presentation the graph machine 
-    implementation handles the integer datatype. Support for floating point 
-    datatype can be achieved by adding floating point variants of each 
-    instruction. This extension however does not require changes to the core 
-    functionality of the system.
-    %\bigskip%
-*)
+For simplicity of presentation the graph machine 
+implementation handles the integer datatype. Support for floating point 
+datatype can be achieved by adding floating point variants of each 
+instruction. This extension however does not require changes to the core 
+functionality of the system.
 
+*)
+(* begin hide *)
 Require Import List.
 Require Import Datatypes.
 Require Import ZArith.
@@ -34,184 +33,146 @@ Require Import VUtils.
 Require Import VHeap.
 
 Module Export GMi.
-
+(* end hide *)
 (** * Instruction Set 
-    We start by defining the instruction set for built-in arithmetic.
-    %\bigskip%
-*)
+We start by defining the instruction set for built-in arithmetic.
 
+*)
 Inductive tGMInstr : Type := 
     | Add : tGMInstr
     | Sub : tGMInstr
     | Mul : tGMInstr
     | Div : tGMInstr
-
 (** The [Neg] instruction is unary and negates its argument.
-    %\bigskip%
-*)
 
+*)
     | Neg : tGMInstr
-
 (** The [Alloc] instruction allocates indirection nodes on the heap pointing to 
-    a distiguished %$\varnothing$% address.
-    %\bigskip%
-*)
+a distiguished %$\varnothing$% address.
 
+*)
     | Alloc : nat -> tGMInstr
-
 (** The [Cond] instruction evaluates its first argument and if the result is 
-    true, replaces $\kappa$ with the second argument, otherwise with the third
-    argument. Each of these arguments are list of instructions.
-    %\bigskip%
+true, replaces $\kappa$ with the second argument, otherwise with the third
+argument. Each of these arguments are list of instructions.
+    
 *)
-
     | Cond : list tGMInstr -> list tGMInstr -> tGMInstr
-
 (** The following family of boolean binary instructions have the standard 
-    boolean semantics.
-    %\bigskip%
+boolean semantics.
+    
 *)
-
     | Eq : tGMInstr
     | Ne : tGMInstr
     | Lt : tGMInstr
     | Le : tGMInstr
     | Gt : tGMInstr
     | Ge : tGMInstr
-
 (** The [Eval] instruction is analogous to a function call. The current code 
-    segment and the elements of the stack, except the stack top, are removed 
-    and pushed onto the dump %$\delta$%. The code segment is populated with the
-    [Unwind] instruction.
-    %\bigskip%
+segment and the elements of the stack, except the stack top, are removed 
+and pushed onto the dump %$\delta$%. The code segment is populated with the
+[Unwind] instruction.
+    
 *)
-
     | Eval : tGMInstr
-    
 (** The [MkAp] instruction pops off the top two entries from the stack and 
-    creates an application node [NAp] on the heap; the address of the created 
-    node is pushed onto the stack.
-    %\bigskip%
-*)    
+creates an application node [NAp] on the heap; the address of the created 
+node is pushed onto the stack.
 
+*)    
     | MkAp : tGMInstr
-    
 (** The [Pop] and [Push] instructions operate on the stack and each take a 
-    positive numeric argument [n]. [Pop] instruction removes [n] addresses from 
-    the stack, whereas [Push], retrieves the %$n^{th}$% address from the top of
-    the stack and pushes it onto the stack top.
-    %\bigskip%
-*)    
+positive numeric argument [n]. [Pop] instruction removes [n] addresses from 
+the stack, whereas [Push], retrieves the %$n^{th}$% address from the top of
+the stack and pushes it onto the stack top.
 
+*)    
     | Pop : nat -> tGMInstr
     | Push : nat -> tGMInstr
-    
 (** The [PushGlobal] instruction takes a string argument, representing a 
-    supercombinator name, looks up its address in the global section and pushes
-    it on the top of the stack. [PushInt] allocates a numeric node on the heap 
-    with the passed argument and pushes the address of the node onto the stack.
-    %\bigskip%
-*)    
+supercombinator name, looks up its address in the global section and pushes
+it on the top of the stack. [PushInt] allocates a numeric node on the heap 
+with the passed argument and pushes the address of the node onto the stack.
 
+*)    
     | PushGlobal : tName -> tGMInstr
     | PushInt : Z -> tGMInstr
 (**
-    The [Slide] instruction takes a positive numeric argument [n], and removes 
-    as many elements starting from below the top of the stack. Effectively it 
-    %\textit{slides}% the stack top down by [n] elements. The [Unwind] 
-    instruction finds the next [redex] on the G-machine spine.
-    %\bigskip%
-*)
+The [Slide] instruction takes a positive numeric argument [n], and removes 
+as many elements starting from below the top of the stack. Effectively it 
+%\textit{slides}% the stack top down by [n] elements. The [Unwind] 
+instruction finds the next [redex] on the G-machine spine.
 
+*)
     | Slide : nat -> tGMInstr
     | Unwind : tGMInstr
+(** The [Update] instruction modifies the stack top with a \textit{reference} 
+to the element in the stack which the result of an evaluation.
 
-(**
-    The [Update] instruction modifies the stack top with a \textit{reference} 
-    to the element in the stack which the result of an evaluation.
-    %\bigskip%
 *)
-
     | Update : nat -> tGMInstr
-    
-(**
-    The [Pack] instruction introduces a data type.
-    %\bigskip%
-*)
+(** The [Pack] instruction introduces a data type.
 
+*)
     | Pack : nat -> nat -> tGMInstr
     | Split : nat -> tGMInstr
-    
 (**
-    The [Print] instruction reads the object at the top of the stack, converts 
-    it to a string representation and appends it to the output string, 
-    %$\omega$%. 
-    %\bigskip%
+The [Print] instruction reads the object at the top of the stack, converts 
+it to a string representation and appends it to the output string, 
+
 *)
-
     | Print : tGMInstr.
-    
 (** This ends the instruction set for the G-machine. We now define the 
-    components of the G-machine. The code stream is a list of G-machine
-    instructions.
-    %\bigskip%
-*)    
+components of the G-machine. The code stream is a list of G-machine
+instructions.
 
+*)    
 Definition tGMCode := list tGMInstr.
-
 (** The G-machine heap %$\eta$%, stores objects of the type [tNode]. [tNode] 
-    objects represent the nodes in the logical graph, embodied as the heap 
-    in a G-machine state.
-    %\bigskip%
-*)    
+objects represent the nodes in the logical graph, embodied as the heap 
+in a G-machine state.
 
+*)    
 Inductive tNode : Type := 
     | NAp : tAddr -> tAddr -> tNode
     | NNum : Z -> tNode
     | NInd : tAddr -> tNode
     | NGlobal : nat -> tGMCode -> tNode
     | NConstr : nat -> list tAddr -> tNode.
-
 (**
-    The stack is implemented as a list of addresses. The statistics section
-    %$\tau$%, represented by the type [tGMStats] stores the state number of a
-    G-machine state. The state number is a count of the number of steps taken 
-    by the machine since the initial configuration %\textit{I}% was loaded into 
-    it. The [tGMGlobals] section is an associative container of supercombinator
-    names to their addresses in the heap, and the dump is a list of G-code 
-    instructions and a stack pair. The output is repsented by an integer.
-    %\bigskip%
-*)
+The stack is implemented as a list of addresses. The statistics section
+%$\tau$%, represented by the type [tGMStats] stores the state number of a
+G-machine state. The state number is a count of the number of steps taken 
+by the machine since the initial configuration %\textit{I}% was loaded into 
+it. The [tGMGlobals] section is an associative container of supercombinator
+names to their addresses in the heap, and the dump is a list of G-code 
+instructions and a stack pair. The output is repsented by an integer.
 
+*)
 Definition tGMHeap := tHeap tNode.
 Definition tGMStack := list tAddr.
 Definition tGMStats := nat.
 Definition tGMGlobals := tAssocs tName tAddr.
 Definition tGMDump := list (tGMCode * tGMStack).
 Definition tGMOutput := Z.
-
 (** * G-Machine State 
-    The G-machine state is inductively defined as the type [tGMState]. To read 
-    and modify each element we define accessor functions.
-    %\bigskip%
-*)
+The G-machine state is inductively defined as the type [tGMState]. The elements
+of the G-machine are read and modified using individual accessor functions. A 
+7-tuple shorthand is employed for defining G-machine states.
 
+*)
 Inductive tGMState : Type := 
     | GMState : tGMOutput
-        -> tGMCode
-        -> tGMStack
-        -> tGMDump
-        -> tGMHeap
-        -> tGMGlobals
-        -> tGMStats
-        -> tGMState.
-
+             -> tGMCode
+             -> tGMStack
+             -> tGMDump
+             -> tGMHeap
+             -> tGMGlobals
+             -> tGMStats
+             -> tGMState.
+(* begin hide *)
 Notation "( output , code , stack , dump , heap , globals , stats )" := 
     (GMState output code stack dump heap globals stats).
-
-(** The preceding notation is a shorthand for defining G-machine states
-    %\bigskip%
-*)
 
 Definition getOutput (m : tGMState) : tGMOutput :=
     match m with
@@ -272,11 +233,13 @@ Definition putStats (stats : tGMStats) (m : tGMState) : tGMState :=
 Definition incrSteps (m : tGMState) : tGMState :=
     putStats (S (getStats m)) m.
 
+Import ListNotations.
+(* end hide *)
 (** The arithmetic and comparison operations are implemented 
-    below. These functions are used to define the machine's instruction set
-    implementation for arithmetic and unary operations.
-*)
+below. These functions are used to define the machine's instruction set
+implementation for arithmetic and unary operations.
 
+*)
 Open Scope Z_scope.
 
 Definition opAdd (arg1 : Z) (arg2 : Z) : Z :=
@@ -295,13 +258,11 @@ Definition opNeg (arg1 : Z) : Z :=
     0 - arg1.
 
 Close Scope Z_scope.
-
-Import ListNotations.
-
 (** Heap nodes are allocated using the [allocNodes] function. 
-    On successful allocation, the function returns the new heap and the 
-    newly allocated addresses; otherwise it returns a [None] value in the 
-    [option] monad.
+On successful allocation, the function returns the new heap and the 
+newly allocated addresses; otherwise it returns a [None] value in the 
+[option] monad.
+
 *)
 Fixpoint allocNodes (n : nat) (h : tGMHeap) : option (tGMHeap * tAddrs) :=
     match n with
@@ -316,14 +277,13 @@ Fixpoint allocNodes (n : nat) (h : tGMHeap) : option (tGMHeap * tAddrs) :=
         | _ => None
         end
     end.
-
 (** * Instruction Set Implementation 
-    The instruction set for the G-machine is implemented in accordance with the 
-    semantic rules defined in %\S\ref{gm:transitions}%. Instead of returning a
-    value of type [tGMState], the implementing functions return an [option] monad 
-    containing a [GMState] or [None] to indicate error conditions.
-*)
+The instruction set for the G-machine is implemented in accordance with the 
+semantic rules defined in %\S\ref{gm:transitions}%. Instead of returning a
+value of type [tGMState], the implementing functions return an [option] monad 
+containing a [GMState] or [None] to indicate error conditions.
 
+*)
 Definition alloc (n : nat) (m : tGMState) : option tGMState :=
     match allocNodes n (getHeap m) with
     | Some (heap', addrs) => 
@@ -363,7 +323,10 @@ Definition mkAp (m : tGMState) : option tGMState :=
         | nil => Some m
         | a2::as''=>
             match hAlloc (getHeap m) (NAp a1 a2) with
-            | Some (modifiedHeap, addr) => Some (putHeap modifiedHeap (putStack (addr::as'') m))
+            | Some (modifiedHeap, addr) => 
+                Some (putHeap 
+                        modifiedHeap 
+                            (putStack (addr::as'') m))
             | _ => None
             end
         end
@@ -395,12 +358,12 @@ Definition rearrange (n : nat) (heap : tGMHeap) (stack : tGMStack) : option tGMS
     end.
 
 (** ** Unwinding the spine 
-    As discussed in %\S\ref{gm:transitions}%, the [Unwind] function is complex.
-    This functionality is encoded in the following auxiliary
-    function [unwindHelper] which performs the major processing involved in 
-    unwinding the G-machine spine.
-*)
+As discussed in %\S\ref{gm:transitions}%, the [Unwind] function is complex.
+This functionality is encoded in the following auxiliary
+function [unwindHelper] which performs the major processing involved in 
+unwinding the G-machine spine.
 
+*)
 Definition unwindHelper 
     (stack : tGMStack) 
     (heap : tGMHeap)
@@ -415,20 +378,43 @@ Definition unwindHelper
             match (hLookup heap addr) with
             | Some node =>
                 match node with
-                | NNum n               => Some (putCode i (putStack (addr :: dstack) (putDump dump' m)))
-                | NAp a1 a2            => Some (putCode [Unwind] (putStack (a1 :: addr :: addrs) m))
-                | NInd ind             => Some (putCode [Unwind] (putStack (ind :: addrs) m))
-                | NConstr t addrs      => Some (putCode i (putStack (addr :: dstack) (putDump dump' m)))
+                | NNum n               => 
+                    Some (putCode 
+                            i 
+                            (putStack 
+                                (addr :: dstack) 
+                                (putDump dump' m)))
+                | NAp a1 a2            => 
+                    Some (putCode 
+                            [Unwind] 
+                            (putStack (a1 :: addr :: addrs) m))
+                | NInd ind             => 
+                    Some (putCode 
+                            [Unwind] 
+                            (putStack (ind :: addrs) m))
+                | NConstr t addrs      => 
+                    Some (putCode 
+                            i 
+                            (putStack 
+                                (addr :: dstack) 
+                                (putDump dump' m)))
                 | NGlobal numArgs code => 
                     if (ble_nat numArgs (List.length addrs))
                     then
-                        match rearrange numArgs heap (addr :: addrs) with
-                        | Some newStack => Some (putCode code (putStack newStack m))
+                        match rearrange numArgs heap (addr :: addrs) 
+                        with
+                        | Some newStack => 
+                            Some (putCode code (putStack newStack m))
                         | _ => None
                         end
                     else
                         match head (rev stack) with
-                        | Some a => Some (putCode i (putStack (a :: dstack) (putDump dump' m)))
+                        | Some a => 
+                            Some (putCode 
+                                    i 
+                                    (putStack 
+                                        (a :: dstack) 
+                                        (putDump dump' m)))
                         | _         => None
                         end
                  end
@@ -445,31 +431,32 @@ Definition slide (n : nat) (m : tGMState) : option tGMState :=
     | a :: as' => Some (putStack (a :: drop n as') m)
     | _        => None
     end.
-
 (** ** Weak Head Normal Form
-    In a lazy implementation of %\textbf{H}% it important to ascertain to which
-    degree an expression is evaluated. We evaluate an expression till it 
-    reaches its weak-head normal form and no further.
-*)
+In a lazy implementation of %\textbf{H}% it important to ascertain to which
+degree an expression is evaluated. We evaluate an expression till it 
+reaches its weak-head normal form and no further.
 
+*)
 Definition eval2WHNF (m : tGMState) : option tGMState :=
     match getStack m with
     | addr :: addrs =>
         let
             frame := (getCode m, addrs)
         in
-            Some (putDump (frame :: getDump m) (putStack [addr] (putCode [Unwind] m)))
+            Some 
+                (putDump 
+                    (frame :: getDump m) 
+                    (putStack [addr] (putCode [Unwind] m)))
     | _ => None
     end.
-
 (** ** Boxed Representation of Integers and Booleans 
-    Integers and booleans in the G-machine are represented as boxed in [NNum]
-    nodes. Thus, for arithmetic and boolean operations to function correctly, 
-    an %\textit{unboxing}% operation is required on the data. The result of
-    such an operation, when being written back to the heap requires a 
-    complementary %\textit{boxing}% operation.
-*)
+Integers and booleans in the G-machine are represented as boxed in [NNum]
+nodes. Thus, for arithmetic and boolean operations to function correctly, 
+an %\textit{unboxing}% operation is required on the data. The result of
+such an operation, when being written back to the heap requires a 
+complementary %\textit{boxing}% operation.
 
+*)
 Definition boxInteger (v : Z) (m : tGMState) : option tGMState :=
     match hAlloc (getHeap m) (NNum v) with
     | Some (h, addr) => Some (putStack (addr :: getStack m) (putHeap h m))
@@ -491,21 +478,22 @@ Definition boxBoolean (v : bool) (m : tGMState) : option tGMState :=
         end
     in
         match hAlloc (getHeap m) (NConstr ctorTag []) with
-        | Some (h, addr) => Some (putStack (addr :: getStack m) (putHeap h m))
+        | Some (h, addr) => Some (putStack 
+                                    (addr :: getStack m) 
+                                    (putHeap h m))
         | _ => None
         end.
-
 (** We now define the general form of dyadic arithmetic and boolean operations.
-    [dyadic] takes a boxing function, an unboxing function, a binary operation 
-    and a G-machine state. It pops off the top two elements on the stack, 
-    unboxes them, and applies the binary operation on the unboxed 
-    representations of these elements. It then boxes the result and the address 
-    of the boxed representation is pushed onto the stack.
-    
-    The [monadic] function behaves in a similar manner, except that the applied
-    operation is unary.
+[dyadic] takes a boxing function, an unboxing function, a binary operation 
+and a G-machine state. It pops off the top two elements on the stack, 
+unboxes them, and applies the binary operation on the unboxed 
+representations of these elements. It then boxes the result and the address 
+of the boxed representation is pushed onto the stack.
+
+The [monadic] function behaves in a similar manner, except that the applied
+operation is unary.
+
 *)
-    
 Definition dyadic 
     {X Y : Type} 
     (box : Y -> tGMState -> option tGMState) 
@@ -539,11 +527,10 @@ Definition monadic
         end
     | _ => None
     end.
-
 (** The binary arithmetic, boolean and unary arithmetic operations are defined 
-    in terms of the generic [dyadic] and [monadic] functions.
-*)    
+in terms of the generic [dyadic] and [monadic] functions.
 
+*)    
 Definition arithmetic2 (op : Z -> Z -> Z) (m : tGMState) : option tGMState :=
     dyadic boxInteger unboxInteger op m.
 
@@ -601,13 +588,12 @@ Definition cond
         end
     | _ => None
     end.
-
 (** ** The Dispatch Function 
-    The [dispatch] function takes as an input a G-machine instruction, a 
-    G-machine state and applies the appropriate instruction implementor function
-    to produce a resulting state.
-*)
+The [dispatch] function takes as an input a G-machine instruction, a 
+G-machine state and applies the appropriate instruction implementor function
+to produce a resulting state.
 
+*)
 Definition dispatch (instruction : tGMInstr) (m : tGMState) : option tGMState :=
     match instruction with
     | PushGlobal f => pushGlobal f m
@@ -636,42 +622,35 @@ Definition dispatch (instruction : tGMInstr) (m : tGMState) : option tGMState :=
     | Split n => splitter n m
     | Print => printer m
     end.
+(** %\label{gm:nonterm}% *)
+(** * Modeling Execution and Non-termination 
+The naive idea of defining program execution as a recursive function fails since [Fixpoint] functions in Coq are
+required to satisfy the property of structural recursion. This does not fit
+with programs containing jumps and loops as these constructs might lead to the 
+possibility of non-termination and hence a predefined number of steps required
+by the structural recursion criterion cannot possibly model this behavior 
+%\cite{Bertot:2008:ICC:1379918.1380269}%.
+The problem lies in the fact that a program can run indefinitely if it 
+contains infinite loops or mutual jumps and thus should be modeled as an 
+%\textbf{infinite trace}%. The Coq co-inductive type is the right candidate 
+for representing such traces.
+We define the function [haltState] as a identity function such that given a 
+G-machine state it returns an identical state. We also define the 
+[errorState] function to intialize the output to a zero value.
 
-
-
-(** * Modeling Program Execution and Non-termination %\label{gm:nonterm}%
-
-    The naive idea of defining program execution
-    as a recursive function fails since [Fixpoint] functions in Coq are
-    required to satisfy the property of structural recursion. This does not fit
-    with programs containing jumps and loops as these constructs might lead to the 
-    possibility of non-termination and hence a predefined number of steps required
-    by the structural recursion criterion cannot possibly model this behavior 
-    %\cite{Bertot:2008:ICC:1379918.1380269}%.
-
-    The problem lies in the fact that a program can run indefinitely if it 
-    contains infinite loops or mutual jumps and thus should be modeled as an 
-    %\textbf{infinite trace}%. The Coq co-inductive type is the right candidate 
-    for representing such traces.
-    
-    We define the function [haltState] as a identity function such that given a 
-    G-machine state it returns an identical state. We also define the 
-    [errorState] function to intialize the output to a zero value.
 *)
-
 Definition haltState (m : tGMState) : tGMState :=
     m.
 
 Definition errorState (m : tGMState) : tGMState :=
     putOutput 0%Z m.
-
 (** The [stepFunc] take a G-machine state. If the code stream is empty, the 
-    [haltState] function is called. Otherwise, an instruction is removed 
-    from the code stream and the [dispatch] function is called
-    with the instruction as an argument. The number of steps executed by the 
-    G-machine is incremented for bookkeeping. The resulting state is returned.
-*)
+[haltState] function is called. Otherwise, an instruction is removed 
+from the code stream and the [dispatch] function is called
+with the instruction as an argument. The number of steps executed by the 
+G-machine is incremented for bookkeeping. The resulting state is returned.
 
+*)
 Definition stepFunc (m : tGMState) : tGMState :=
     let
         code := (getCode m)
@@ -684,93 +663,35 @@ Definition stepFunc (m : tGMState) : tGMState :=
             | _ => errorState m
             end
         end.
-
 (** We now define the [step] relation based on [stepFunc]. The
-    [stepRule] proposition defines that given any machine state [m], [stepFunc]
-    can be applied to [m]. The notation serves as shorthand for this 
-    proposition.
+[stepRule] proposition defines that given any machine state [m], [stepFunc]
+can be applied to [m]. The notation serves as shorthand for this 
+proposition.
+
 *)
-
+(* begin hide *)
 Reserved Notation "m1 '==>' m2" (at level 40).
-
+(* end hide *)
+(** printing ==> %$\Longrightarrow$% *)
 Inductive step : tGMState -> tGMState -> Prop :=
     | stepRule : forall m, m ==> stepFunc m
 
 where "m1 '==>' m2" := (step m1 m2).
-
 (** We also define the [multistep] notation and a corresponding shorthand, 
-    as an application of [multi], defined in [SfLib], on the relation [step] 
-    indicating one or more application of the [step] relation.
-*)
+as an application of [multi], defined in [SfLib], on the relation [step] 
+indicating one or more application of the [step] relation.
 
+*)
+(* begin hide *)
 Notation multistep := (multi step).
 Notation "t1 '==>*' t2" := (multistep t1 t2) (at level 40).
-
-(*
-Import ListNotations.
-
-Open Local Scope nat_scope.
-Open Local Scope string_scope.
-
-Definition test : tGMState :=
-(
-0%Z, 
-[PushGlobal "main"; Eval; Print], 
-nil, 
-nil, 
-(Heap 
- 19
- (FreeStore [] 20)
- [
-    (1, (NGlobal 1 [Push 0; Eval; Update 1; Pop 1; Unwind])); 
-    (2, (NGlobal 2 [Push 0; Eval; Update 2; Pop 2; Unwind])); 
-    (3, (NGlobal 2 [Push 1; Eval; Update 2; Pop 2; Unwind])); 
-    (4, (NGlobal 3 [Push 2; Push 2; MkAp; Push 3; Push 2; MkAp; MkAp; Eval; Update 3; Pop 3; Unwind])); 
-    (5, (NGlobal 3 [Push 2; Push 2; MkAp; Push 1; MkAp; Eval; Update 3; Pop 3; Unwind])); 
-    (6, (NGlobal 1 [Push 0; Push 1; PushGlobal "compose"; MkAp; MkAp; Eval; Update 1; Pop 1; Unwind])); 
-    (7, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Add ; Update 2; Pop 2; Unwind])); 
-    (8, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Sub ; Update 2; Pop 2; Unwind])); 
-    (9, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Mul ; Update 2; Pop 2; Unwind])); 
-    (10, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Div ; Update 2; Pop 2; Unwind])); 
-    (11, (NGlobal 1 [Push 0; Eval; Neg ; Update 1; Pop 1; Unwind])); 
-    (12, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Eq ; Update 2; Pop 2; Unwind])); 
-    (13, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Ne ; Update 2; Pop 2; Unwind])); 
-    (14, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Lt ; Update 2; Pop 2; Unwind])); 
-    (15, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Le ; Update 2; Pop 2; Unwind])); 
-    (16, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Gt ; Update 2; Pop 2; Unwind])); 
-    (17, (NGlobal 2 [Push 1; Eval; Push 1; Eval; Ge ; Update 2; Pop 2; Unwind])); 
-    (18, (NGlobal 3 [Push 0; Eval; Cond [Push 1] [Push 2]; Update 3; Pop 3; Unwind])); 
-    (19, (NGlobal 0 [PushInt 5; Update 0; Pop 0; Unwind]))
- ]
-), 
-[("I", 1); ("K", 2); ("K1", 3); ("S", 4); ("compose", 5); ("twice", 6); ("+", 7); ("-", 8); ("*", 9); ("/", 10); ("negate", 11); ("==", 12); ("~=", 13); ("<", 14); ("<=", 15); (">", 16); (">=", 17); ("if", 18); ("main", 19)], 
-0
-).
-
-Example testEvaluates : forall result,
-    test ==>* result ->
-    getOutput result = 5%Z.
-Proof.
-    destruct result; intros. unfold t0.
-    unfold getOutput.
-    unfold test.
-    unfold stepFunc.
-    normalize.
-Qed.
-*)
-
-Inductive tProgramTrace2 : Type :=
-    | start : tProgramTrace2
-    | next  : tGMState -> tProgramTrace2 -> tProgramTrace2.
-
+(* end hide *)
 (** * Determinism of G-machine 
-
 The G machine is deterministic. We prove this by observing that [stepFunc] dispatches
 the instruction found at the head of the code stream to the appropriate function, otherwise if the
 code stream is empty the machine steps to the haltstate. Since the step function is deterministic,
-the machine execution is deterministic too. *)
-
-(** ** Valid Program Trace
+the machine execution is deterministic too.
+** Valid Program Trace
 We now define the notion of a valid trace. 
 For a machine [gm], the start state forms a valid program trace. 
 Similarly, the start state and its next state forms a valid program trace. 
@@ -778,7 +699,11 @@ Finally, [forall] traces [t],
 and machine states [gm], [gm'], [gm''], if a machine in state [gm'] steps to [gm''] and [gm'] followed by 
 trace [t] forms a valid trace, then [gm''] followed by the state [gm'] followed by the trace [t] is also
 a valid trace.
+
 *)
+Inductive tProgramTrace2 : Type :=
+    | start : tProgramTrace2
+    | next  : tGMState -> tProgramTrace2 -> tProgramTrace2.
 
 Inductive validTrace : tGMState -> tProgramTrace2 -> Prop :=
     | startValid : forall gm, (validTrace gm start)
@@ -787,13 +712,11 @@ Inductive validTrace : tGMState -> tProgramTrace2 -> Prop :=
         gm' ==> gm'' -> 
         validTrace gm (next gm' t) -> 
         validTrace gm (next gm'' (next gm' t)).
-
-
 (** ** Stepping through a G-machine 
-    We now prove that the [step] relation is deterministic. We use the function
-    [deterministic] defined in [SfLib].
-*)    
+We now prove that the [step] relation is deterministic. We use the function
+[deterministic] defined in [SfLib].
 
+*)    
 Theorem deterministicStep :
     (deterministic step).
 Proof.
@@ -803,20 +726,18 @@ Proof.
     inversion H. inversion H0. reflexivity.
     inversion H. inversion H0. reflexivity.
 Qed.
-
 (** We define the [halted] property of the G-machine, when the instruction 
-    stream is empty.
+stream is empty.
+
 *)
-    
 Definition halted (gm : tGMState) : Prop :=
     nil = getCode gm.
-
 (** * Progress in G Machine 
-    The progress theorem states that given a G-machine state [gm], either it 
-    has halted, or it steps to another state [gm']. A G-machine halts when its 
-    instruction stream is empty.
-*)
+The progress theorem states that given a G-machine state [gm], either it 
+has halted, or it steps to another state [gm']. A G-machine halts when its 
+instruction stream is empty.
 
+*)
 Theorem progressGM :
     forall gm, (halted gm) \/ (exists gm', (step gm gm')).
 Proof.
@@ -827,31 +748,30 @@ Qed.
 
 CoInductive tProgramTrace : Type :=
     | NextGM : tGMState -> tProgramTrace -> tProgramTrace.
-
 (** The [generateTrace] function, given a G-machine state,
-    creates a program trace
+creates a program trace
+
 *)
-    
 CoFixpoint generateTrace (m : tGMState) : tProgramTrace := 
     NextGM m (generateTrace (stepFunc m)).
 
 Definition traceHead (x:tProgramTrace) := let (a,s) := x in a.
 
 Definition traceTail (x:tProgramTrace) := let (a,s) := x in s.
-
 (** Using [traceHead] and [traceTail] functions, we define the [nthTrace]
-    function that extracts the $n^{th}$ element from a trace and is analogous 
-    to the $n^{th}$ function that operate on lists. We declare that the program
-    has finished executing if the following condition holds true:
+function that extracts the $n^{th}$ element from a trace and is analogous 
+to the $n^{th}$ function that operate on lists. We declare that the program
+has finished executing if the following condition holds true:
    
 % 
-    For a program trace P, 
-    \begin{equation}
-    \forall i, \: \mathrm{if} \: \mathtt{nthTrace}(i, P) \: = \: \mathtt{nthTrace}((i+1), P) \: \mathrm{then} \: \mathtt{nthTrace}(i, P) \: = \: \mathtt{haltState}
-    \end{equation}
+For a program trace P, 
+\begin{equation}
+\forall i, \mathrm{if} \: \mathtt{nthTrace}(i, P) \: = \: \mathtt{nthTrace}((i+1), P) \: 
+\mathrm{then} \: \mathtt{nthTrace}(i, P) \: = \: \mathtt{haltState}
+\end{equation}
 %
-*)
 
+*)
 Fixpoint nthTrace (n : nat) (trace: tProgramTrace) : tGMState :=
     match n with
     | O => traceHead trace
@@ -860,16 +780,14 @@ Fixpoint nthTrace (n : nat) (trace: tProgramTrace) : tGMState :=
 
 Definition run (m : tGMState) : tProgramTrace:=
     generateTrace m.
-
 (** Finally to test the G-machine, we define the [runGM] function that 
-    takes a G-machine configuration and a step number [n] and generates a trace 
-    which corresponds to running the machine [n] steps.
+takes a G-machine configuration and a step number [n] and generates a trace, 
+and returns state of the machine after the %$n^{th}$% step.
+
 *)    
-    
 Definition runGM 
     (numSteps : nat) 
     (machine : tGMState) : tGMState :=
     nthTrace numSteps (run machine).    
 
 End GMi.
-

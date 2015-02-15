@@ -1,15 +1,16 @@
 (** * Formal Specification of H
-    We begin with the types that supported in H. As H is a higher order 
-    language it supports function objects through the [ArrowType]. 
-    Booleans and integers are supported through [BoolType] and [NumType] 
-    respectively. The [UnitType] denotes the singleton type [Unit] 
-    %\cite{Pierce:2002:TPL:509043}%. We use important definitions, proofs, 
-    and notations from the [SfLib] and [MoreStlc] modules of 
-    %\cite{pierce2013software}% in developing the formal specification of
-    %\textbf{H}%. Portions of the [SfLib] module with modifications are 
-    presented in %\ref{appendix:B:SfLib}%.
+We begin with the types that supported in H. As H is a higher order 
+language it supports function objects through the [ArrowType]. 
+Booleans and integers are supported through [BoolType] and [NumType] 
+respectively. The [UnitType] denotes the singleton type [Unit] 
+%\cite{Pierce:2002:TPL:509043}%. We use important definitions, proofs, 
+and notations from the [SfLib] and [MoreStlc] modules of 
+%\cite{pierce2013software}% in developing the formal specification of
+%\textbf{H}%. Portions of the [SfLib] module with modifications are 
+presented in %\S\ref{appendix:B:SfLib}%.
+
 *)
-    
+(* begin hide *)
 Require Import ZArith.
 Require Import String.
 Require Import Ascii.
@@ -18,25 +19,20 @@ Require Import SfLib.
 Require Import VUtils.
 
 Module Export Hi.
-
+(* end hide *)
 (** Though we define the [ArrowType] as a value type %\textbf{H}%, for the sake 
-    of simplicity the implementation of the [G-machine] and the [R-machine] treats 
-    programs of base type. It should be noted that any program of %\textbf{arrow}% 
-    type is treated by providing it enough arguments so that the resultant 
-    application is of base type.
-*)
+of simplicity the implementation of the [G-machine] and the [R-machine] treats 
+programs of base type. It should be noted that any program of %\textbf{arrow}% 
+type is treated by providing it enough arguments so that the resultant 
+application is of base type.
 
+*)
 Inductive typeH : Type :=
     | ArrowType : typeH -> typeH -> typeH
     | BoolType : typeH
     | NumType : typeH
     | UnitType : typeH.
-
-(** Throughout the course of this work, the Coq tactic notation 
-    %\textbf{Case\_aux}% has been used to increase the readability of proofs. It
-    also checks inadvertent omission of proof cases. 
-*)
-
+(* begin hide *)
 Tactic Notation "type_cases" tactic(first) ident(c) :=
     first;
     [ Case_aux c "ArrowType"
@@ -44,25 +40,24 @@ Tactic Notation "type_cases" tactic(first) ident(c) :=
     | Case_aux c "NumType"
     | Case_aux c "UnitType"
     ].
+(* end hide *)
+(** The inductive datatype [term_h] defines the terms in %\textbf{H}%. The first 
+three allowed terms are 
+%$\lambda$% terms - signifying variables [EVar], function application [EAp] and 
+function abstraction [EAbs]. This is followed by the definition of numbers, 
+booleans and arithmetic expressions. 
 
-(**
-    The inductive datatype [term_h] defines the terms in %\textbf{H}%. The first 
-    three allowed terms are 
-    %$\lambda$% terms - signifying variables [EVar], function application [EAp] and 
-    function abstraction [EAbs]. This is followed by the definition of numbers, 
-    booleans and arithmetic expressions. 
-        
-    [EIf] introduces the if-then-else construct, and [ELet] specifies the [let] 
-    %\ldots% [in] construct. [EFix] represents the %\textbf{Y}% operator. 
-    We also introduce [EEq], a first class equality operator. These form the 
-    extensions to %$\lambda$%-calculus for [H]. 
-    
-    Though we deal with integers, denoted by the Coq type [Z], and a limited set of 
-    arithmetic and boolean operators, extending this specification to include 
-    floating points and a more comprehensive set of operations should be 
-    straightforward. 
+[EIf] introduces the if-then-else construct, and [ELet] specifies the [let] 
+%\ldots% [in] construct. [EFix] represents the %\textbf{Y}% operator. 
+We also introduce [EEq], a first class equality operator. These form the 
+extensions to %$\lambda$%-calculus for [H]. 
+
+Though we deal with integers, denoted by the Coq type [Z], and a limited set of 
+arithmetic and boolean operators, extending this specification to include 
+floating points and a more comprehensive set of operations should be 
+straightforward. 
+
 *)
-
 Inductive term_h : Type :=
     | EVar : id -> term_h
     | EAp : term_h -> term_h -> term_h
@@ -77,10 +72,7 @@ Inductive term_h : Type :=
     | ELet : id -> term_h -> term_h -> term_h
     | EFix : term_h -> term_h
     | EEq : term_h -> term_h -> term_h.
-
-(** The [term_cases] tactic notation is used in subsequent proofs.
-*)
-
+(* begin hide *)
 Tactic Notation "term_cases" tactic(first) ident(c) :=
     first;
     [ Case_aux c "EVar" 
@@ -100,56 +92,48 @@ Tactic Notation "term_cases" tactic(first) ident(c) :=
     | Case_aux c "EFix"
     | Case_aux c "EEq"
     ].
-
+(* end hide *)
 (** * Operational Semantics
-    In this section we present the operational semantics of %\textbf{H}%. As we have
-    previously outlined, the evaluation of a [H] program starts by translating 
-    it to an extended %$\lambda$%-calculus form, followed by evaluation of the generated 
-    %$\lambda$%-calculus terms through %$\beta$% reduction. The process of evaluating 
-    the generated %$\lambda$%-calculus terms are formally defined in the following 
-    sections.
-*)
+In this section we present the operational semantics of %\textbf{H}%. As we have
+previously outlined, the evaluation of a [H] program starts by translating 
+it to an extended %$\lambda$%-calculus form, followed by evaluation of the generated 
+%$\lambda$%-calculus terms through %$\beta$% reduction. The process of evaluating 
+the generated %$\lambda$%-calculus terms are formally defined in the following 
+sections.
 
-(** ** Substitution of %\textbf{H}% terms
-    %$\beta$% reduction in H involves substituting the appropriate free variable
-    in an expression with the supplied term. Thus %[%x := s%]% t implies 
-    substituting all free occurrences of the variable [x] in [t] with the 
-    expression [s]. 
-    %
-    \bigskip
-    \mathligson
-    
-    \inference
-    {}
-    {[y \: := \: 8] (EAbs \: x  \: Z  \: (\: y \: + \: 5)) 
-    \: \Rightarrow \: (EAbs \: x  \: Z  \: (13))}
-    \bigskip
-    
-    \inference
-    {}
-    {[x \: := \: 5] (EAbs \: x  \: Z  \: (x \:  +  \: 5))
-    \: \Rightarrow \: (EAbs \: x  \: Z  \: (x \:  +  \: 5))}
-    \bigskip
-    
-    \mathligsoff
-    %    
-    In the latter case, as [x] is bound to the abstraction, the substitution has no effect.
-    
-    We assume that appropriate $\alpha$-conversions have been 
-    applied before [subst] is invoked to avoid name-capture problems if any.
-    
-    With these rules in place we define the recursive function [subst] as a Coq 
-    [Fixpoint]. 
-*)
+** Substitution of %\textbf{H}% terms
+%$\beta$%-reduction in H involves substituting the appropriate free variable
+in an expression with the supplied term. Thus, %[%x := s%]% t implies 
+substituting all free occurrences of the variable [x] in [t] with the 
+expression [s]. 
 
-    
-(**
-    We use the auxilliary function [eq_id_dec] 
-    %\ref{AppB:eq_id_dec}% to ascertain whether the variable being substituted 
-    is bound to the expression.
+%
+\mathligson
+\inference
+{}
+{[y \: := \: 8] (EAbs \: x  \: Z  \: (\: y \: + \: 5)) 
+\: \Rightarrow \: (EAbs \: x  \: Z  \: (\: 8 \: + \: 5))}
+\bigskip
+
+\inference
+{}
+{[x \: := \: 5] (EAbs \: x  \: Z  \: (x \:  +  \: 5))
+\: \Rightarrow \: (EAbs \: x  \: Z  \: (x \:  +  \: 5))}
+\mathligsoff
+\bigskip
+%
+To preseve laziness, the term %$(8 + 5)$% under the $\lambda$-abstraction in the 
+first expression is not reduced to its sum. In the second expression, [x] is 
+bound to the abstraction and the substitution has no effect.
+
+We assume that appropriate $\alpha$-conversions have been 
+applied before [subst] is invoked to avoid name-capture problems if any.
+
+With these rules in place we define the recursive function [subst] as a Coq 
+[Fixpoint]. The auxilliary function [eq_id_dec] %\S\ref{appendix:B:SfLib}% to 
+ascertain whether the variable being substituted is bound to the expression.
 
 *) 
-
 Fixpoint subst (x : id) (s : term_h) (t : term_h) : term_h :=
     match t with
     | EVar x' => if eq_id_dec x x' then s else t
@@ -168,19 +152,18 @@ Fixpoint subst (x : id) (s : term_h) (t : term_h) : term_h :=
     | EFix t => EFix (subst x s t)
     | EEq t1 t2 => EEq (subst x s t1) (subst x s t2)
     end.
-
+(* begin hide *)
 Notation "'[' x ':=' s ']' t" := (subst x s t) (at level 20).
-
+(* end hide *)
 (** Evaluation of an [H] program starts by evaluating the [main] expression and 
-    terminates when a value is obtained; which represents the program's value. 
-    Function objects are denoted in H through %$\lambda$%-abstractions and 
-    belong to the set of first class values in H. Similar is case for integers 
-    and booleans. 
+terminates when a value is obtained; which represents the program's value. 
+Function objects are denoted in H through %$\lambda$%-abstractions and 
+belong to the set of first class values in H. Similar is case for integers 
+and booleans. 
+We inductively define a proposition [value] for representing terms that are 
+values. 
 
-    We inductively define a proposition [value] for representing terms that are 
-    values. 
 *)
-
 Inductive value : term_h -> Prop :=
     | v_abs : forall x T11 t12, value (EAbs x T11 t12)
     | v_int : forall x, value (ENum x)
@@ -188,23 +171,22 @@ Inductive value : term_h -> Prop :=
     | v_unit : value EUnit.
 
 Hint Constructors value.
-
 (** ** Types in %\textbf{H}%
-    The type of an expression is determined with respect to a
-    [context], a partial map over types in %\textbf{H}%, [typeH]. This function 
-    given a %\textbf{H}% term either returns the type of the 
-    term within a Coq [option] monad, or returns [option None] if the term is not
-    present in the map. [partial_map] is defined in the [SfLib] module and is 
-    reproduced in %\ref{AppB:partial_map}%. *) 
+The type of an expression is determined with respect to a
+[context], a partial map over types in %\textbf{H}%, [typeH]. This function 
+given a %\textbf{H}% term either returns the type of the 
+term within a Coq [option] monad, or returns [option None] if the term is not
+present in the map. [partial_map] is defined in the [SfLib] module and is 
+reproduced in %\S\ref{appendix:B:SfLib}%. 
 
+*) 
 Definition context := partial_map typeH.
-
-(** printing |- %$\vdash$% *)
-(** printing in %$\in$% *)
-(** printing Gamma %$\Gamma$% *)
-
+(** printing \ %% *)
+(** printing in $\in$ *)
+(** printing Gamma $\Gamma$ *)
+(* begin hide *)
 Reserved Notation "Gamma '|-' t '\in' T" (at level 40).
-
+(* end hide *)
 Inductive has_type : context -> term_h -> typeH -> Prop :=
     | T_Var : forall Gamma x T,
         Gamma x = Some T ->
@@ -213,26 +195,24 @@ Inductive has_type : context -> term_h -> typeH -> Prop :=
     | T_Abs : forall Gamma x T11 T12 t12,
         (extend Gamma x T11) |- t12 \in T12 -> 
         Gamma |- (EAbs x T11 t12) \in (ArrowType T11 T12)
-        
 (** The type of an abstraction is [ArrowType T11 T12], signifying a function
-    that takes a term with type [T11] as argument and returns a term with type 
-    [T12]. The [extend] function takes an existing context and a type-map
-    and adds the type-map to the context. A type-map is a pair of a term and 
-    its type.
-*)        
+that takes a term with type [T11] as argument and returns a term with type 
+[T12]. The [extend] function takes an existing context and a type-map
+and adds the type-map to the context. A type-map is a pair of a term and 
+its type.
 
+*)        
     | T_App : forall T1 T2 Gamma t1 t2,
         Gamma |- t1 \in (ArrowType T1 T2) -> 
         Gamma |- t2 \in T1 -> 
         Gamma |- (EAp t1 t2) \in T2
-
 (** For function applications, the type of the resulting term is determined by 
-    the type of the function being applied. As the return type of the 
-    function abstraction [t1] is type [T2], and given [t2] is of type [T1], 
-    implying a type conforming function application, the type of the result is 
-    indeed [T2].
-*)
+the type of the function being applied. As the return type of the 
+function abstraction [t1] is type [T2], and given [t2] is of type [T1], 
+implying a type conforming function application, the type of the result is 
+indeed [T2].
 
+*)
     | T_Num : forall Gamma n1,
         Gamma |- (ENum n1) \in NumType
     | T_Bool : forall Gamma n1,
@@ -250,11 +230,10 @@ Inductive has_type : context -> term_h -> typeH -> Prop :=
         Gamma |- t1 \in NumType ->
         Gamma |- t2 \in NumType ->
         Gamma |- (EMult t1 t2) \in NumType
-
 (** For arithmetic operations, the type of result is always in [NumType], 
-    provided a valid arithmetic expression is being evaluated. 
-*)
+provided a valid arithmetic expression is being evaluated. 
 
+*)
     | T_If : forall Gamma t1 t2 t3 T1,
         Gamma |- t1 \in BoolType ->
         Gamma |- t2 \in T1 ->
@@ -269,21 +248,19 @@ Inductive has_type : context -> term_h -> typeH -> Prop :=
     | T_Fix : forall Gamma t1 T1,
         Gamma |- t1 \in (ArrowType T1 T1) ->
         Gamma |- EFix t1 \in T1
-
 (** Similarly, the fix point operator [EFix] has a result type [T1]. Note the 
-    function [t1], whose fixpoint is being calculated always has the same input
-    and return types.
+function [t1], whose fixpoint is being calculated always has the same input
+and return types. 
+
 *)
-    
     | T_Eq : forall Gamma t1 t2,
         Gamma |- t1 \in NumType ->
         Gamma |- t2 \in NumType ->
         Gamma |- (EEq t1 t2) \in BoolType
-    
-where "Gamma '|-' t '\in' T" := (has_type Gamma t T).
+where "Gamma |- t \in T" := (has_type Gamma t T).
 
 Hint Constructors has_type.
-
+(* begin hide *)
 Tactic Notation "has_type_cases" tactic(first) ident(c) :=
     first;
     [ Case_aux c "T_Var" 
@@ -303,16 +280,16 @@ Tactic Notation "has_type_cases" tactic(first) ident(c) :=
     | Case_aux c "T_Fix"
     | Case_aux c "T_Eq"
     ].
-
+(* end hide *)
 (** ** Free occurrences during substitution
-    The substitution principle described earlier took into account 
-    whether the variable was free within an expression prior to application of 
-    the substitution rule. The inductive proposition [free_in_term] formalizes 
-    this notion for a variable [x] within a [term_h]. These rules are equivalent
-    to those in %$\lambda$%-calculus, with the exception of [if], [fix], [let] 
-    and [eq] which form the extensions required for %\textbf{H}%.
-*)
+The substitution principle described earlier took into account 
+whether the variable was free within an expression prior to application of 
+the substitution rule. The inductive proposition [free_in_term] formalizes 
+this notion for a variable [x] within a [term_h]. These rules are equivalent
+to those in %$\lambda$%-calculus, with the exception of [if], [fix], [let] 
+and [eq] which form the extensions required for %\textbf{H}%.
 
+*)
 Inductive free_in_term : id -> term_h -> Prop :=
     | fit_var : forall x,
         free_in_term x (EVar x)
@@ -321,14 +298,13 @@ Inductive free_in_term : id -> term_h -> Prop :=
         free_in_term x t1 -> free_in_term x (EAp t1 t2)
     | fit_app2 : forall x t1 t2,
         free_in_term x t2 -> free_in_term x (EAp t1 t2)
-        
 (** In this proposition, we define that if an id [x] is free in any of the terms
-    [t1] or [t2], then it is also free in the application [t1 t2].
-    
-    We define the %\textit{freeness}% of an identifier within allowed 
-    %\textbf{H}% terms in a similar fashion.
-*)
+[t1] or [t2], then it is also free in the application [t1 t2].
 
+We define the _freeness_ of an identifier within allowed 
+%\textbf{H}% terms in a similar fashion.
+
+*)
     | fit_abs : forall x y T11 t12,
         y <> x  ->
         free_in_term x t12 ->
@@ -371,13 +347,11 @@ Inductive free_in_term : id -> term_h -> Prop :=
         x <> y ->
         free_in_term x t2 ->
         free_in_term x (ELet y t1 t2)
-        
-(** In the case of a [let] expression:
-<< let y = t1 in t2 >>
-    we say [x] in free in this expression, iff [x] is not equal to [y] and [x]
-    is free in the body of the [let] expression [t2].
-*)
+(** For [let] expressions, %$let\:y\: =\: t1\: in\: t2$%, we say %$x$% in 
+free in this expression, iff %$x$% is not equal to %$y$% and %$x$%
+is free in the expression %$t2$%.
 
+*)
     | fit_fix : forall x t,
         free_in_term x t -> free_in_term x (EFix t)
 
@@ -389,14 +363,16 @@ Inductive free_in_term : id -> term_h -> Prop :=
         free_in_term x (EEq t1 t2).
 
 Hint Constructors free_in_term.
-
 (** *** Context Invariance
-    We define an auxillary lemma [context_invariance] to prove type preservation 
-    in both big-step and small-step semantics. This lemma shows that given 
-    two equivalent contexts [Gamma], [Gamma]' and a term [t], if the type of [t] 
-    in [Gamma] is [S], then the type of [t] in [Gamma]' must be [S].
-*)
+We define an auxillary lemma [context_invariance] to prove type preservation 
+in both big-step and small-step semantics. This lemma shows that given 
+two equivalent contexts [Gamma], [Gamma]' and a term [t], if the type of [t] 
+in [Gamma] is [S], then the type of [t] in [Gamma]' must be [S].
 
+The Coq tactic notation %\textbf{Case\_aux}% has been used to increase 
+the readability of proofs and report inadvertent omission of proof cases. 
+
+*)
 Lemma context_invariance : forall Gamma Gamma' t S,
      Gamma |- t \in S  ->
      (forall x, free_in_term x t -> Gamma x = Gamma' x) ->
@@ -431,14 +407,11 @@ Proof with eauto.
     Case "T_Eq".
         apply T_Eq...
 Qed.
+(** The following important lemma states that for a term [t] with type [T] in 
+context %$\Gamma$%, if [t] contains a free variable [x], then [x] also has
+some type [T'] in %$\Gamma$%.  
 
-(** %\bigskip%
-    The following important lemma states that for a term [t] with type [T] in 
-    context %$\Gamma$%, if [t] contains a free variable [x], then [x] also has
-    some type [T'] in %$\Gamma$%.  
-    %\bigskip%
 *)
-
 Lemma free_in_context : forall x t T Gamma,
     free_in_term x t ->
     Gamma |- t \in T ->
@@ -455,12 +428,11 @@ Proof with eauto.
         unfold extend in Hctx. 
         rewrite neq_id in Hctx...
 Qed.
-
 (** *** Type preservation in substitution
-    In order to prove type preservation, we show that the substitution
-    function preserved the type of a term in a given context %$\Gamma$%.
-*)
+In order to prove type preservation, we show that the substitution
+function preserved the type of a term in a given context %$\Gamma$%.
 
+*)
 Lemma substitution_preserves_typing : forall Gamma x U v t S,
     (extend Gamma x U) |- t \in S  ->
     empty |- v \in U   ->
@@ -506,49 +478,40 @@ Proof with eauto.
         intros. unfold extend. destruct (eq_id_dec i x0); eauto.
         subst. rewrite neq_id...
 Qed.
-
 (** ** Big-step semantics
-    The big-step semantics %\cite{Kahn:1987:NS:646503.696269}% of %\textbf{H}% 
-    is relatively straightforward and relies on the [subst] function to obtain 
-    the value of non-trivial terms. We define this with the relation [bigStep] 
-    and denote it using %$\leadsto$%. 
+The big-step semantics %\cite{Kahn:1987:NS:646503.696269}% of %\textbf{H}% 
+is relatively straightforward and relies on the [subst] function to obtain 
+the value of non-trivial terms. We define this with the relation [bigStep] 
+and denote it using %$\Downarrow$%. 
+
 *)
-
+(* begin hide *)
 Module BigStep.
-
-(** printing ~~> %$\leadsto$% *)
-
+(* end hide *)
+(** printing ~~> %$\Downarrow$% *)
+(* begin hide *)
 Reserved Notation "t1 '~~>' t2" (at level 40).
-
+(* end hide *)
 Inductive bigStep : term_h -> term_h -> Prop :=
     | BST_Num : forall z,
          ENum z ~~> ENum z
 
     | BST_Bool : forall b,
          EBool b ~~> EBool b
-
 (** For function application, occurrences of the bound variable [x] in the 
-    body [t12] is substituted by the supplied expression [t13].
+body [t12] is substituted by the supplied expression [t13].
 
-%
-\bigskip
-%
-    *)
-
+*)
     | BST_App : forall x T11 t12 t13,
          (EAp (EAbs x T11 t12) t13) ~~> [x := t13]t12
-
 (** The arithmetic operation [plus] is defined as follows: for two expressions, 
-    [t1] and [t2], if [t1] steps to a number [z1] and [t2] steps to a number [z2],
-    then the expression [t1 + t2] steps to [z1 + z2]. In this 
-    formalization of %\textbf{H}%, we convert infix operators to their prefix 
-    forms before evaluation. The treatment for minus and multiplication 
-    operators are similar.
-%
-\bigskip
-%
-    *)
-     
+[t1] and [t2], if [t1] steps to a number [z1] and [t2] steps to a number [z2],
+then the expression [t1 + t2] steps to [z1 + z2]. In this 
+formalization of %\textbf{H}%, we convert infix operators to their prefix 
+forms before evaluation. The treatment for minus and multiplication 
+operators are similar.
+
+*)
     | BST_Plus : forall t1 z1 t2 z2,
          t1 ~~> (ENum z1) ->
          t2 ~~> (ENum z2) ->
@@ -563,27 +526,9 @@ Inductive bigStep : term_h -> term_h -> Prop :=
          t1 ~~> (ENum z1) ->
          t2 ~~> (ENum z2) ->
          (EMult t1 t2) ~~> (ENum (z1 * z2))
-         
 (** The semantics for [if] is defined as follows:
-%
-\mathligson
-\bigskip
 
-\inference
-{\mathtt{t} \leadsto \mathbf{True}}
-{\mathtt{EIf \: t \: t1 \: t2} \leadsto \mathtt{t1}}[if true]
-
-\bigskip
-
-\inference
-{\mathtt{t} \leadsto \mathbf{False}}
-{\mathtt{EIf \: t \: t1 \: t2} \leadsto \mathtt{t2}}[if false]
-
-\bigskip
-\mathligsoff
-%
 *)
-
     | BST_IfTrue : forall t t1 t2,
         t ~~> (EBool true) ->
         (EIf t t1 t2) ~~> t1
@@ -591,19 +536,8 @@ Inductive bigStep : term_h -> term_h -> Prop :=
     | BST_IfFalse : forall t t1 t2,
         t ~~> (EBool false) ->
         (EIf t t1 t2) ~~> t2
-(**
-%
-For \texttt{let} expressions, the following inference rule is applied: 
-\mathligson
-\bigskip
+(** For [let] expressions, the following rule holds: 
 
-\inference
-{\mathtt{[x \: := t1]t2 \leadsto t3 }}
-{\mathtt{ELet \: x \: t1 \: t2} \leadsto \mathtt{t3}}[let]
-
-\bigskip
-\mathligsoff
-%
 *)
     | BST_Let : forall x t1 v t2,
          value v ->
@@ -618,8 +552,8 @@ For \texttt{let} expressions, the following inference rule is applied:
          t2 ~~> (ENum z2) ->
          (EEq t1 t2) ~~> EBool (beq_Z z1 z2)
 
-where "t1 '~~>' t2" := (bigStep t1 t2).
-
+where "t1 ~~> t2" := (bigStep t1 t2).
+(* begin hide *)
 Tactic Notation "step_cases" tactic(first) ident(c) :=
   first;
   [ Case_aux c "BST_Num"
@@ -634,29 +568,26 @@ Tactic Notation "step_cases" tactic(first) ident(c) :=
     | Case_aux c "BST_Fix"
     | Case_aux c "BST_Eq"
   ].        
+(* end hide *)
+(** To demonstrate reduction of sample programs, we define the 
+multistep relation (%$\Downarrow$*%) in terms of big-step semantics. [multi] is
+defined in Appendix B %\S\ref{appendix:B}%.
 
-
-(** 
-    To demonstrate reduction of sample programs, we define the 
-    multistep relation in terms of big-step semantics. [multi] is
-    defined in Appendix B %\ref{appendix:B}%.
 *)
-
 Notation multistep := (multi bigStep).
-
-(** printing ~~>* %$\leadsto$*% *)
-
-Notation "t1 '~~>*' t2" := (multistep t1 t2) (at level 40).
-
+(* begin hide *)
+Notation "t1 ~~>* t2" := (multistep t1 t2) (at level 40).
 Hint Constructors bigStep.
-
+(* end hide *)
+(** printing ~~>* %$\Downarrow$*% *)
 (** Each variable in H is assigned a unique [Id] represented by a [nat]. The 
-    properties of [Id] and their proofs are enumerated in 
-    %\ref{appendix:B:SfLib}%. The following sample [id]s that are used in the 
-    examples. 
-*)
+properties of [Id] and their proofs are enumerated in 
+%\S\ref{appendix:B:SfLib}%. The [id]s used in the sample programs are defined below.
 
+*)
+(* begin hide *)
 Module BigStepSamples.
+(* end hide *)
 
 Notation a := (Id 0).
 Notation f := (Id 1).
@@ -666,6 +597,7 @@ Notation y := (Id 4).
 Notation n := (Id 5).
 Notation m := (Id 6).
 
+(* begin hide *)
 Hint Extern 2 (has_type _ (EAp _ _) _) => 
   eapply T_App; auto.
 Hint Extern 2 (_ = _) => compute; reflexivity.
@@ -740,6 +672,7 @@ Proof.
     unfold basicIfTest.
     normalize.
 Qed.
+(* end hide *)
 
 Definition ifTest :=
     EIf 
@@ -766,6 +699,7 @@ Proof.
     apply multi_refl.
 Qed.
 
+(* begin hide *)
 Definition num_test0 :=
     EIf 
         (EEq (ENum 5) (EPlus (ENum 4%Z) (ENum 1%Z)))
@@ -796,6 +730,7 @@ Qed.
 End Numtest.
 
 Module LetTest.
+(* end hide *)
 
 Definition let_test :=
     ELet
@@ -810,6 +745,7 @@ Example let_test_reduces :
   let_test ~~>* ENum 7.
 Proof. unfold let_test. normalize. Qed.
 
+(* begin hide *)
 Definition let_test1 :=
     ELet x (EMinus (ENum 1) (ENum 5))
         (EMult (EVar x) (ENum 5)).
@@ -822,6 +758,7 @@ Proof.
 End LetTest.
 
 Module AppTest.
+(* end hide *)
 
 Definition square_app_test :=
     EAp (EAbs x NumType (EMult (EVar x) (EVar x))) (ENum 5).
@@ -833,6 +770,7 @@ Proof.
     normalize.
 Qed.
 
+(* begin hide *)
 End AppTest.
 
 Module FixTest1.
@@ -864,16 +802,14 @@ Qed.
 *)
 
 End FixTest1.
-
 End BigStepSamples.
-
-
+(* end hide *)
 (** *** Type preservation in big-step
-    We now prove that the big-step semantics defined for a program preserves 
-    its type. The auxilliary lemmas defined earlier are applied to prove this 
-    theorem.
-*)
+We now prove that the big-step semantics defined for a program preserves 
+its type. The auxilliary lemmas defined earlier are applied to prove this 
+theorem.
 
+*)
 Theorem big_step_preservation : forall t t' T,
      empty |- t \in T  ->
      t ~~> t'  ->
@@ -897,18 +833,19 @@ Proof with eauto.
 Qed.
 
 End BigStep.
-
 (** ** Small-step semantics
 The small step semantics of H takes into account the single steps the
 machine takes to obtain the final result during the evaluation of program. 
 The step rules are as follows:
+
 *)
-
+(* begin hide *)
 Module SmallStep.
-
+(* end hide *)
 (** printing ==> %$\ensuremath{\Longrightarrow}$% *)
+(* begin hide *)
 Reserved Notation "t1 '==>' t2" (at level 40).
-
+(* end hide *)
 Inductive smallStep : term_h -> term_h -> Prop :=
     | SST_AppAbs : forall x T11 t12 v2,
          value v2 -> 
@@ -920,11 +857,10 @@ Inductive smallStep : term_h -> term_h -> Prop :=
          value v1 ->
          t2 ==> t2' ->
          (EAp v1 t2) ==> (EAp v1 t2')
-         
 (** It is to be noted that function application in this semantics follows normal
-    order evaluation.
-*)          
+order evaluation.
 
+*)          
     | SST_Plus1 : forall t1 t1' t2,
          t1 ==> t1' ->
          (EPlus t1 t2) ==> (EPlus t1' t2)
@@ -983,7 +919,7 @@ Inductive smallStep : term_h -> term_h -> Prop :=
         (EEq (ENum z1) (ENum z2)) ==> EBool (beq_Z z1 z2)
 
 where "t1 '==>' t2" := (smallStep t1 t2).
-
+(* begin hide *)
 Tactic Notation "step_cases" tactic(first) ident(c) :=
   first;
   [ Case_aux c "SST_AppAbs"
@@ -1017,26 +953,27 @@ Tactic Notation "step_cases" tactic(first) ident(c) :=
     | Case_aux c "SST_Eq2"
     | Case_aux c "SST_Eq"
   ].        
-
 Hint Extern 2 (has_type _ (EAp _ _) _) => 
   eapply T_App; auto.
 Hint Extern 2 (_ = _) => compute; reflexivity.
-
+(* end hide *)
 (** In a manner similar to the notation in big-step semantics, we define a 
-    multi step relation for small step too. 
+multi step relation (%$\Longrightarrow$*%)for small-step. 
+
 *)
+(* begin hide *)
 Notation multistep := (multi smallStep).
 Notation "t1 '==>*' t2" := (multistep t1 t2) (at level 40).
 Hint Constructors smallStep.
 
 Module SmallStepSamples.
+(* end hide *)
+(** In the following section, through a variety
+of examples, we show that the sample expressions type checks and applying 
+small step semantics on these expressions, produces valid reductions.
 
-(**
-    In the following section, through a variety
-    of examples, we show that the sample expressions type checks and applying 
-    small step semantics on these expressions, produces valid reductions.
 *)
-
+(* begin hide *)
 Notation a := (Id 0).
 Notation f := (Id 1).
 Notation g := (Id 2).
@@ -1046,6 +983,7 @@ Notation n := (Id 5).
 Notation m := (Id 6).
 
 Module Numtest.
+(* end hide *)
 
 Definition eqTest :=
     EEq (ENum 5) (ENum 1).
@@ -1056,7 +994,6 @@ Proof.
   unfold eqTest.
   auto 10.
 Qed.
-
 (** printing ==>* %$\ensuremath{\Longrightarrow}$*% *)
 
 Example eqTestReduces :
@@ -1085,6 +1022,7 @@ Proof.
     normalize.
 Qed.
 
+(* begin hide *)
 Definition num_test0 :=
     EIf 
         (EEq (ENum 5) (EPlus (ENum 4) (ENum 1)))
@@ -1107,6 +1045,7 @@ Qed.
 End Numtest.
 
 Module LetTest.
+(* end hide *)
 
 Notation x := (Id 3).
 
@@ -1124,6 +1063,7 @@ Example let_test_reduces :
   let_test ==>* ENum 7.
 Proof. unfold let_test. normalize. Qed.
 
+(* begin hide *)
 Definition let_test1 :=
     ELet x (EMinus (ENum 1) (ENum 5))
         (EMult (EVar x) (EVar x)).
@@ -1136,6 +1076,7 @@ Proof.
 End LetTest.
 
 Module FixTest1.
+(* end hide *)
 
 Definition fact :=
     EFix
@@ -1157,32 +1098,29 @@ Example fact_example:
   (EAp fact (ENum 4)) ==>* (ENum 24).
 Proof. unfold fact. normalize. Qed.
 
+(* begin hide *)
 End FixTest1.
-
 End SmallStepSamples.
-
+(* end hide *)
 (** *** Progress in small-step
-    Contrary to big-step, progress is important in small-step. In the 
-    following theorem we prove that the progress property is indeed satisfied by
-    our presentation of the small-step semantics on %\textbf{H}%. In the
-    following proof, we utilize the Coq tactic notation [Case], [SCase] etc. from 
-    SfLib to label the proof that is being handled.
-*)
+Contrary to big-step, progress is important in small-step. In the 
+following theorem we prove that the progress property is indeed satisfied by
+our presentation of the small-step semantics on %\textbf{H}%. In the
+following proof, we utilize the Coq tactic notation [Case], [SCase] etc. from 
+SfLib to label the proof that is being handled.
 
+*)
 Theorem progress : forall t T, 
      empty |- t \in T ->
      value t \/ exists t', t ==> t'.
 
 (** This theorem states that if term [t] has type [T] in the empty 
-    context, then either [t] is a [value] or there exists a [t']
-    such that [t] steps to it. This theorem is important as it illustrates
-    that the small-step relation defined fo %\textbf{H}% does not lead to 
-    terms that do not make progress.
-    %
-    \bigskip
-    %
-*)
+context, then either [t] is a [value] or there exists a [t']
+such that [t] steps to it. This theorem is important as it illustrates
+that the small-step relation defined fo %\textbf{H}% does not lead to 
+terms that do not make progress.
 
+*)
 Proof with eauto.
     intros t T Ht.
     remember (@empty typeH) as Gamma.
@@ -1190,26 +1128,16 @@ Proof with eauto.
     has_type_cases (induction Ht) Case; intros HeqGamma; subst.
     Case "T_Var".
         inversion H.
-
 (** Since variables are not typed in the empty context, [t] cannot 
-    be a variable.
-    %
-    \bigskip
-    %
-*)
+be a variable. If [t] is an application having the form [t1 t2], then there are
+two possible forms [t1] can take, either [t1] is a value or [t1] steps.
+If [t1] is a value and if [t2] is a value, then there exists a substituion
+and [t] steps. On the other hand if [t2] steps, then again [t] steps to 
+[t']. If we consider that [t1] can take a step, in which case we say that 
+[t] stepped to [t']. Similar reasoning is applied to rest of the possible
+cases.
 
-(** If [t] is an application having the form [t1 t2], then there are
-    two possible forms [t1] can take, either [t1] is a value or [t1] steps.
-    If [t1] is a value and if [t2] is a value, then there exists a substituion
-    and [t] steps. On the other hand if [t2] steps, then again [t] steps to 
-    [t']. If we consider that [t1] can take a step, in which case we say that 
-    [t] stepped to [t']. Similar reasoning is applied to rest of the possible
-    cases.
-    %
-    \bigskip
-    %
 *)               
-
     Case "T_Abs".
         left...
     Case "T_App".
@@ -1317,12 +1245,11 @@ Proof with eauto.
             inversion H as [t1' Hstp].
             exists (EEq t1' t2)...
 Qed.
-
 (** *** Type preservation in small-step 
-    Having proved the requisite theorems and lemmas, we can now prove that the
-    small-step semantics for %\textbf{H}% guarantee type preservation.
-*)
+Having proved the requisite theorems and lemmas, we can now prove that the
+small-step semantics for %\textbf{H}% guarantee type preservation.
 
+*)
 Theorem small_step_preservation : forall t t' T,
      empty |- t \in T  ->
      t ==> t'  ->
@@ -1344,7 +1271,9 @@ Proof with eauto.
         eapply substitution_preserves_typing...
         inversion HT...
 Qed.
-
+(* begin hide *)
 End SmallStep.
+(* end hide *)
 
 End Hi.
+

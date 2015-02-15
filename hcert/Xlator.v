@@ -1,14 +1,14 @@
 (** * Verified Translator 
-    The G-code to R-code translator is written in Coq. As the translator accesses
-    the internal structures of both the G-machine and R-machine, we reuse these
-    structures and definitions to implement the translator. We also reuse the
-    parameterized heap defined in the [VHeap] modules to represent the heaps used in
-    the G-machine and R-machine. In the case of the G-machine the heap structure
-    contained nodes of types [tNode], whereas in the case of the R-machine, the
-    nodes are of type [tRMNodes].
+The G-code to R-code translator is written in Coq. As the translator accesses
+the internal structures of both the G-machine and R-machine, we reuse these
+structures and definitions to implement the translator. We also reuse the
+parameterized heap defined in the [VHeap] modules to represent the heaps used in
+the G-machine and R-machine. In the case of the G-machine the heap structure
+contained nodes of types [tNode], whereas in the case of the R-machine, the
+nodes are of type [tRMNodes].
+
 *)
-
-
+(* begin hide *)
 Require Import List.
 Require Import ZArith.
 Require Import String.
@@ -22,52 +22,48 @@ Require Import GM.
 Require Import RM.
 
 Module Export XlatorImpl.
-
+(* end hide *)
 (** The code-table is defined as an associative container of labels to addresses
-    in the R-machine heap. In the present implementation we use an associative
-    container that employs a linear lookup technique yielding a running time 
-    of %$O(n)$% for querying a key. This can be optimized by replacing the 
-    internal implementation of the associative container [tAssocs] with a hash 
-    table.
-    %\bigskip%
-*)
+in the R-machine heap. In the present implementation we use an associative
+container that employs a linear lookup technique yielding a running time 
+of %$O(n)$% for querying a key. This can be optimized by replacing the 
+internal implementation of the associative container [tAssocs] with a hash 
+table.
 
+*)
 Definition tCodeTable := tAssocs tName tAddr.
+(** As presented in section %\S\ref{tx:txapproach}%, the [tCodeSegmentZone] 
+indicates the position where the translator inserts the generated code in the 
+code-segment of %$\rho$%.
 
-(** As presented in section %\S\ref{tx:txapproach}%, the [tCodeSegmentZone] indicates 
-    the zone to which the translator appends the generated code in the 
-    code-segment of %$\rho$%.
-    %\bigskip%
 *)
-
 Inductive tCodeSegmentZone : Type :=
     | Prefix : tCodeSegmentZone
     | Suffix : tCodeSegmentZone.
-
 (** * Translator State
-    The translator is modeled as an 8-tuple Coq record. Translating the stack-based
-    G-code instuctions to R-code involves register allocation. As defined in 
-    section %\S\ref{rm:components}%, for each type of register in the R-machine,
-    the translator uses a simple register allocation strategy of incrementing 
-    the last allocated index while allocating a new register. The fields [fVC], 
-    [fPC] and [fRC] are used for bookkeeping the value of the last allocated 
-    index for each register type. 
-    
-    [fCode] represents the code-segment, a list of R-code instructions,
-    and [fCodeTable] represents the code-table of an R-machine. The types 
-    [tRMCode] [tRegs] and [tCodeTable] are defined in section 
-    %\S\ref{rm:components}%. Once translation completes, these fields are 
-    loaded into the R-machine configuration.
-    
-    [fStack] is a list of R-code instructions manipulated as a stack. During the 
-    translation process, the intermediate R-code generated as a result of 
-    translating the [PushInt] G-code instruction is pushed onto the [fStack]. 
-    The [fRegStack] is an intermediate structure and is used during register 
-    allocation. The last field [fGM] is the G-machine configuration being 
-    translated.
-    %\bigskip%
-*)
+The translator is modeled as an 8-tuple Coq record. Translating the stack-based
+G-code instuctions to R-code involves register allocation. As defined in 
+section %\S\ref{rm:components}%, for each type of register in the R-machine,
+the translator uses a simple register allocation strategy of incrementing 
+the last allocated index while allocating a new register. The fields [fVC], 
+[fPC] and [fRC] are used for bookkeeping the value of the last allocated 
+index for each register type. 
 
+[fCode] represents the code-segment, a list of R-code instructions,
+and [fCodeTable] represents the code-table of an R-machine. The types 
+[tRMCode] [tRegs] and [tCodeTable] are defined in section 
+%\S\ref{rm:components}%. Once translation completes, these fields are 
+loaded into the R-machine configuration.
+
+[fStack] is a list of R-code instructions manipulated as a stack. During the 
+translation process, the intermediate R-code generated as a result of 
+translating the [PushInt] G-code instruction is pushed onto the [fStack]. 
+The [fRegStack] is an intermediate structure and is used during register 
+allocation. The last field [fGM] is the G-machine configuration being 
+translated. [put]* and [get]* functions, one for each field, define the 
+accessors and are omitted for brevity.
+
+*)
 Record tXlator : Type := mkXlator
     { fVC : nat;
       fPC : nat;
@@ -77,11 +73,7 @@ Record tXlator : Type := mkXlator
       fRegStack : tRegs;
       fCodeTable : tCodeTable;
       fGM : tGMState }.
-
-(** The [put]* and [get]* functions define the accessors for the translator.
-    %\bigskip%
-*)
-
+(* begin hide *)
 Definition putVC (newVC : nat) (xlator : tXlator) : tXlator :=
     match xlator with
     | {| fVC := _;
@@ -249,18 +241,19 @@ Definition putGM (gm : tGMState) (xlator : tXlator) : tXlator :=
          fCodeTable := codeTable;
          fGM := gm |}
     end.
+(* end hide *)
 
 (** * Translator Implementation
-    In this section we formalize the translation mechanism. We start by 
-    defining the helper functions required by the translator.
+In this section we formalize the translation mechanism. We start by 
+defining the helper functions required by the translator.
 
-    The [addCode] helper function adds a list of R-code instructions to the 
-    code-segment. The zone where the code is inserted is determined by the 
-    [zone] parameter. The [addInstr] function prefixes a single instruction to 
-    the code-segment. [pushRMInstr] and [popRMInstr] manipulate the stack and 
-    implement the push and pop operations. The [pushReg] and [popReg] functions 
-    manipulate the register stack.
-    %\bigskip%
+The [addCode] helper function adds a list of R-code instructions to the 
+code-segment. The zone where the code is inserted is determined by the 
+[zone] parameter. The [addInstr] function prefixes a single instruction to 
+the code-segment. [pushRMInstr] and [popRMInstr] manipulate the stack and 
+implement the push and pop operations. The [pushReg] and [popReg] functions 
+manipulate the register stack.
+
 *)
 
 Definition addCode (code : tRMCode) (zone : tCodeSegmentZone) (xlator : tXlator) : tXlator :=
@@ -291,10 +284,10 @@ Definition popReg (xlator : tXlator) : option (tReg * tXlator) :=
     end.
 
 (** The [allocateReg] function allocates a register of a given type. It does so 
-    by incrementing the count of the last allocated register of that type. When 
-    a register of a particular type is required by the translator, it reads the 
-    value from appropriate field.
-    %\bigskip%
+by incrementing the count of the last allocated register of that type. When 
+a register of a particular type is required by the translator, it reads the 
+value from appropriate field.
+
 *)
 
 Definition allocateReg (regType : tRegType) (xlator : tXlator) : tXlator :=
@@ -305,14 +298,14 @@ Definition allocateReg (regType : tRegType) (xlator : tXlator) : tXlator :=
     end.
 
 (** The [allocateRegAndLoadValue] helper function allocates a
-    register and loads a value into it. The load instruction is
-    recorded in the [fCodeStack], and the allocated register
-    is recorded in the [fRegStack].
-    
-    The [allocateRegsAndLoadValues] helper function calls the
-    [allocateRegAndLoadValue] function recursively to load a 
-    set of values.
-    %\bigskip%
+register and loads a value into it. The load instruction is
+recorded in the [fCodeStack], and the allocated register
+is recorded in the [fRegStack].
+
+The [allocateRegsAndLoadValues] helper function calls the
+[allocateRegAndLoadValue] function recursively to load a 
+set of values.
+
 *)
 
 Definition allocateRegAndLoadValue
@@ -337,10 +330,10 @@ Fixpoint allocateRegsAndLoadValues
     end.
 
 (** The [addCodeEntry] function take a string label, indicating the name of a 
-    supercombinator or a label indicating the address of an unconditional jump 
-    and an address. It creates a pair of these two elements and adds this to the
-    code-table.
-    %\bigskip%
+supercombinator or a label indicating the address of an unconditional jump 
+and an address. It creates a pair of these two elements and adds this to the
+code-table.
+
 *)
 
 Definition addCodeEntry 
@@ -354,18 +347,18 @@ Definition addCodeEntry
 Open Local Scope nat_scope.
 
 (** [getSCStream] takes as its input the name of a supercombinator and retrieves
-    the G-code instruction sequence associated with the body of the 
-    supercombinator by looking up the address of the supercombinator in the 
-    globals section of the G-machine and then using that address to fetch the 
-    instruction stream G-machine heap. The return type is the option monad, 
-    which contains the [NGlobal] node in case of a successful lookup. If the
-    lookup fails or if the node associated with the address is not a 
-    supercombinator the [None] value is returned indicating an error condition.
-    
-    The [getNumArgs] function takes a supercombinator name and returns the 
-    number of arguments that the supercombinator accepts. This is useful for 
-    parameter register allocation during translating function applications.
-    %\bigskip%
+the G-code instruction sequence associated with the body of the 
+supercombinator by looking up the address of the supercombinator in the 
+globals section of the G-machine and then using that address to fetch the 
+instruction stream G-machine heap. The return type is the option monad, 
+which contains the [NGlobal] node in case of a successful lookup. If the
+lookup fails or if the node associated with the address is not a 
+supercombinator the [None] value is returned indicating an error condition.
+
+The [getNumArgs] function takes a supercombinator name and returns the 
+number of arguments that the supercombinator accepts. This is useful for 
+parameter register allocation during translating function applications.
+
 *)
 
 Definition getSCStream (name : tName) (xlator : tXlator) : option GMi.tNode :=
@@ -389,13 +382,13 @@ Definition getNumArgs (name : tName) (xlator : tXlator) : nat :=
     end.
 
 (** The [loadInstr] helper function compiles a list of instructions from 
-    the intermediate instruction stack of the translator. It takes as an 
-    argument the number of instructions to load. Once instructions are
-    loaded into the list, those entries are popped off the stack. The 
-    [loadRegs] function is similar, except that it works on registers 
-    instead of instructions. The [getCodeAddress] function returns the 
-    address of the input label by looking up the code-table.
-    %\bigskip%
+the intermediate instruction stack of the translator. It takes as an 
+argument the number of instructions to load. Once instructions are
+loaded into the list, those entries are popped off the stack. The 
+[loadRegs] function is similar, except that it works on registers 
+instead of instructions. The [getCodeAddress] function returns the 
+address of the input label by looking up the code-table.
+
 *)
     
 Definition loadInstr (numArgs : nat) (xlator : tXlator) : (tRMCode * tXlator) :=
@@ -419,29 +412,31 @@ Definition getCodeAddress (name : tName) (xlator : tXlator) : tAddr :=
 Import ListNotations.
 
 (** ** Translating Function Application 
-    The [Invoke_static] instruction of Dalvik is used to generate a 
-    function call in the R-machine. The number of arguments, [numArgs], required 
-    by the supercombinator is looked up using the [getNumArgs] helper function. 
-    [numArgs] registers are streamed from the register stack using the [loadRegs]
-    helper function into the [regs] variable. In a similar manner, the 
-    instructions for populating the parameter registers required by the function 
-    call are streamed from the translator's [fStack] field using the helper 
-    function [loadInstr] into the [instrs] variable. Finally, the instructions 
-    for the function call are assembled in the following order:
-    
-    - instructions ([instrs]) required to populate the function call parameter 
-      registers are laid out
-    - the function call instruction with appropriate registers ([regs]) is laid 
-      out
-    - instruction required to move the result of the function call, using 
-      [Move_result], is laid out
-    
-    As [Move_result] requires a register to store the return value of the 
-    function call, a new value register is allocated through the [allocateReg] 
-    call, resulting in a modified translator state. The laid out instructions 
-    along with the modified translator state are returned back to the caller 
-    as a pair of type [(tRMCode * tXlator)].
-    %\bigskip%
+The [Invoke_static] instruction of Dalvik is used to generate a 
+function call in the R-machine. The number of arguments, [numArgs], required 
+by the supercombinator is looked up using the [getNumArgs] helper function. 
+[numArgs] registers are streamed from the register stack using the [loadRegs]
+helper function into the [regs] variable. In a similar manner, the 
+instructions for populating the parameter registers required by the function 
+call are streamed from the translator's [fStack] field using the helper 
+function [loadInstr] into the [instrs] variable. Finally, the instructions 
+for the function call are assembled in the following order:
+%
+\begin{itemize}
+\item instructions (\texttt{instrs}) required to populate the function call parameter 
+registers are laid out
+\item the function call instruction with appropriate registers (\texttt{regs}) is laid 
+out
+\item instruction required to move the result of the function call (using 
+the \texttt{Move\_result} instruction) is laid out
+\end{itemize}
+%
+As [Move_result] requires a register to store the return value of the 
+function call, a new value register is allocated through the [allocateReg] 
+call, resulting in a modified translator state. The laid out instructions 
+along with the modified translator state are returned back to the caller 
+as a pair of type [(tRMCode * tXlator)].
+
 *)
 
 Definition generateCall 
@@ -458,52 +453,45 @@ Definition generateCall
             (pair 
                 (app instrs [Invoke_static regs name; Move_result (Reg V xlator.(fVC))]) 
                 (allocateReg V xlator'')).
-
 (** ** Translating Dyadic and Monadic Operations
-    The [generateDyadicCode] function is used to translate binary arithmetic and 
-    logical G-code instructions in R-code. This generic function allocates a 
-    register for holding the return value and used the [loadRegs] function to 
-    retrieve the list of registers containing the operands. The R-code 
-    instruction for the operator is laid out based on a match on the [op] 
-    parameter followed by the second and the first parameter registers. The 
-    instructions are then laid out at the prescribed [zone] in the translator's 
-    code-segment. The [generateMonadicCode] function is similar, except that it
-    requires a single operand, and hence uses a single register.    
-    %\bigskip%
-*)
+The [generateDyadicCode] function is used to translate binary arithmetic and 
+logical G-code instructions in R-code. This generic function allocates a 
+register for holding the return value and used the [loadRegs] function to 
+retrieve the list of registers containing the operands. The R-code 
+instruction for the operator is laid out based on a match on the [op] 
+parameter followed by the second and the first parameter registers. The 
+instructions are then laid out at the prescribed [zone] in the translator's 
+code-segment. The [generateMonadicCode] function is similar, except that it
+requires a single operand, and hence uses a single register.    
 
+*)
 Definition generateDyadicCode 
-    (op : tGMInstr) 
-    (zone : tCodeSegmentZone) 
-    (xlator : tXlator) 
-    : tXlator :=
-    let 
-        vReg := Reg V xlator.(fVC)
-    in
-        let
-            (regs, xlator') := loadRegs 2 (allocateReg V xlator)
-        in
-            let
-                code := 
-                match op with
-                | GMi.Add => (Add vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Sub => (Sub vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Mul => (Mul vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Div => (Div vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Eq => (CmpEq vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Ne => (CmpNe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Lt => (CmpLt vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Le => (CmpLe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Gt => (CmpGt vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | GMi.Ge => (CmpGe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0)))::nil
-                | _ => nil
-                end
-            in
-                addCode code zone xlator'.
-
-(**
-    %\bigskip%
-*)
+(op : tGMInstr) 
+(zone : tCodeSegmentZone) 
+(xlator : tXlator) 
+: tXlator :=
+let 
+ vReg := Reg V xlator.(fVC)
+ in
+     let 
+     (regs, xlator') := loadRegs 2 (allocateReg V xlator)
+     in
+         let 
+         code := match op with
+         | GMi.Add => [Add vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Sub => [Sub vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Mul => [Mul vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Div => [Div vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Eq => [CmpEq vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Ne => [CmpNe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Lt => [CmpLt vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Le => [CmpLe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Gt => [CmpGt vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | GMi.Ge => [CmpGe vReg (nth 1 regs (R, 0)) (nth 0 regs (R, 0))]
+         | _ => nil
+         end
+         in
+             addCode code zone xlator'.
 
 Definition generateMonadicCode 
     (op : tGMInstr) 
@@ -524,21 +512,19 @@ Definition generateMonadicCode
                 end
             in
                 addCode code zone xlator'.
-
 (** ** In-Built Functions
-    As the G-code program that is being translated is designed to run on the 
-    G-machine, it contains several graph and stack manipulation related 
-    instructions, such as [Unwind], [Update], [Slide] to mention a few. 
-    On the other hand a register machine does not have graph or stack 
-    manipulation instructions in its set. To bridge this gap, a library of 
-    in-built functions is defined and loaded as a part of the initial 
-    configuration of every R-machine instance. The translator on encountering 
-    such G-code instructions generates an appropriate [Invoke-static] call to 
-    the corresponding in-built function. This is implemented in the 
-    [generateBuiltInCall] function defined below.
-    %\bigskip%
-*)
+As the G-code program that is being translated is designed to run on the 
+G-machine, it contains several graph and stack manipulation related 
+instructions, such as [Unwind], [Update], [Slide] to mention a few. 
+On the other hand a register machine does not have graph or stack 
+manipulation instructions in its set. To bridge this gap, a library of 
+in-built functions is defined and loaded as a part of the initial 
+configuration of every R-machine instance. The translator on encountering 
+such G-code instructions generates an appropriate [Invoke-static] call to 
+the corresponding in-built function. This is implemented in the 
+[generateBuiltInCall] function defined below.
 
+*)
 Definition generateBuiltInCall
     (inbuilt : tName)
     (args : tRegVals)
@@ -552,7 +538,6 @@ Definition generateBuiltInCall
             (code, xlator'') := generateCall (List.length args) inbuilt xlator'
         in
             addCode code zone xlator''.
-        
 (*        
 | GMi.Alloc num => addCode [Invoke_static [reg0] "__allocNode"; Move_result reg1] zone xlator 
 | GMi.Unwind => addCode [Invoke_static [] "__unwind"] zone xlator
@@ -566,36 +551,34 @@ Definition generateBuiltInCall
 | GMi.Print => addCode [Invoke_static [] "__print"] zone xlator
 | GMi.Cond trueBranch falseBranch => addCode [Invoke_static [reg0; reg1] "__cond"] zone xlator
 *)
-
 (** ** Translator Dispatch Function 
-    The recursive function [translateCode] performs the heavy lifting during a 
-    translator run. It accepts a translator state, a G-code stream and the zone
-    where the translated R-code instruction is appended to in the code-segment.
-    The [{struct code}] directive tells Coq that [code] is the reducing argument
-    to this [Fixpoint] definition.
-    
-    Each instruction from the code stream is examined, and dispatched for 
-    translation based on the match. The [PushGlobal] instruction is translated 
-    to a function call, the [PushInt] instruction results in a register
-    allocation, followed by pushing a [Const] instruction in [fStack] and the 
-    allocated register in the [fRegStack] fields of the translator. The [Push]
-    instruction results in a parameter register allocation which is subsequently
-    pushed onto the register stack.
-    
-    For all dyadic and monadic instructions, the appropriate helper function is 
-    invoked to generate the required code. The [generateBuiltInCall] function
-    translates the G-machine graph and stack manipulation instructions to 
-    reserved built-in functions. The function names are prefixed with 
-    a double underscore to indicate that they are machine internal.
-    
-    Translation proceeds till the [code] is exhausted, upon which the
-    modified translator object is returned to the caller.
-    
-    %\bigskip%
+The recursive function [translateCode] performs the heavy lifting during a 
+translator run. It accepts a translator state, a G-code stream and the zone
+where the translated R-code instruction is appended to in the code-segment.
+The [{struct code}] directive tells Coq that [code] is the reducing argument
+to this [Fixpoint] definition.
+
+Each instruction from the code stream is examined, and dispatched for 
+translation based on the match. The [PushGlobal] instruction is translated 
+to a function call, the [PushInt] instruction results in a register
+allocation, followed by pushing a [Const] instruction in [fStack] and the 
+allocated register in the [fRegStack] fields of the translator. The [Push]
+instruction results in a parameter register allocation which is subsequently
+pushed onto the register stack.
+
+For all dyadic and monadic instructions, the appropriate helper function is 
+invoked to generate the required code. The [generateBuiltInCall] function
+translates the G-machine graph and stack manipulation instructions to 
+reserved built-in functions. The function names are prefixed with 
+a double underscore to indicate that they are machine internal.
+
+Translation proceeds till the [code] is exhausted, upon which the
+modified translator object is returned to the caller.
+
 *)
-
+(* begin hide *)
 Open Local Scope string_scope.
-
+(* end hide *)
 Fixpoint translateCode
     (xlator : tXlator)
     (code : tGMCode)
@@ -607,53 +590,53 @@ Fixpoint translateCode
         let xlator''' :=
             match instr with
             | GMi.PushGlobal name => 
-                let 
-                    (code, xlator'') := generateCall (getNumArgs name xlator) name xlator
-                in
-                    addCode code zone xlator''
+                let (code, xlator'') := 
+                    generateCall (getNumArgs name xlator) name xlator
+                in addCode code zone xlator''
             | GMi.PushInt num => allocateRegAndLoadValue xlator num 
             | GMi.Push num =>
-                let
-                    pReg := Reg P xlator.(fPC)
-                in
-                    allocateReg P (pushReg pReg xlator)
-            | GMi.Add              => generateDyadicCode GMi.Add zone xlator
-            | GMi.Sub              => generateDyadicCode GMi.Sub zone xlator
-            | GMi.Mul              => generateDyadicCode GMi.Mul zone xlator
-            | GMi.Div              => generateDyadicCode GMi.Div zone xlator
-            | GMi.Eq               => generateDyadicCode GMi.Eq zone xlator 
-            | GMi.Ne               => generateDyadicCode GMi.Ne zone xlator
-            | GMi.Lt               => generateDyadicCode GMi.Lt zone xlator
-            | GMi.Le               => generateDyadicCode GMi.Le zone xlator
-            | GMi.Gt               => generateDyadicCode GMi.Gt zone xlator
-            | GMi.Ge               => generateDyadicCode GMi.Ge zone xlator
-            | GMi.Neg              => generateMonadicCode GMi.Neg zone xlator
-            | GMi.Alloc num        => generateBuiltInCall "__alloc" [Z.of_nat num] zone xlator
-            | GMi.Unwind           => generateBuiltInCall "__unwind" [] zone xlator
-            | GMi.Pop num          => generateBuiltInCall "__pop" [] zone xlator
-            | GMi.Update num       => generateBuiltInCall "__update" [Z.of_nat num] zone xlator
-            | GMi.Slide num        => generateBuiltInCall "__slide" [Z.of_nat num] zone xlator
-            | GMi.MkAp             => generateBuiltInCall "__mkAp" [] zone xlator
-            | GMi.Eval             => generateBuiltInCall "__eval" [] zone xlator
-            | GMi.Split num        => generateBuiltInCall "__split" [Z.of_nat num] zone xlator
-            | GMi.Print            => generateBuiltInCall "__print" [] zone xlator
-            | _                    => xlator
+                let pReg := Reg P xlator.(fPC)
+                in allocateReg P (pushReg pReg xlator)
+            | GMi.Add        => generateDyadicCode GMi.Add zone xlator
+            | GMi.Sub        => generateDyadicCode GMi.Sub zone xlator
+            | GMi.Mul        => generateDyadicCode GMi.Mul zone xlator
+            | GMi.Div        => generateDyadicCode GMi.Div zone xlator
+            | GMi.Eq         => generateDyadicCode GMi.Eq zone xlator 
+            | GMi.Ne         => generateDyadicCode GMi.Ne zone xlator
+            | GMi.Lt         => generateDyadicCode GMi.Lt zone xlator
+            | GMi.Le         => generateDyadicCode GMi.Le zone xlator
+            | GMi.Gt         => generateDyadicCode GMi.Gt zone xlator
+            | GMi.Ge         => generateDyadicCode GMi.Ge zone xlator
+            | GMi.Neg        => generateMonadicCode GMi.Neg zone xlator
+            | GMi.Alloc num  => 
+                generateBuiltInCall "__alloc" [Z.of_nat num] zone xlator
+            | GMi.Unwind     => generateBuiltInCall "__unwind" [] zone xlator
+            | GMi.Pop num    => generateBuiltInCall "__pop" [] zone xlator
+            | GMi.Update num => 
+                generateBuiltInCall "__update" [Z.of_nat num] zone xlator
+            | GMi.Slide num  => 
+                generateBuiltInCall "__slide" [Z.of_nat num] zone xlator
+            | GMi.MkAp       => generateBuiltInCall "__mkAp" [] zone xlator
+            | GMi.Eval       => generateBuiltInCall "__eval" [] zone xlator
+            | GMi.Split num  => 
+                generateBuiltInCall "__split" [Z.of_nat num] zone xlator
+            | GMi.Print      => generateBuiltInCall "__print" [] zone xlator
+            | _              => xlator
 (*
             | GMi.Cond tb fb       => generateBranchCalls tb fb zone xlator
             | GMi.Pack tag arity   => xlator
 *)
             end
-        in
-            translateCode xlator''' code' zone
+        in translateCode xlator''' code' zone
     end.
 
 Close Local Scope nat_scope.
 
 (** ** Translation Kernel
-    The translator retrieves the supercombinator definitions from the G-machine's
-    global and heap sections and translates them into R-code using the 
-    [translateAssocs] function. Finally, the [main] function is 
-    translated to RM code.
+The translator retrieves the supercombinator definitions from the G-machine's
+global and heap sections and translates them into R-code using the 
+[translateAssocs] function. Finally, the [main] function is 
+translated to RM code.
 *)
 
 Definition translateGlobal 

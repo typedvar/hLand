@@ -1,24 +1,25 @@
+(* begin hide *)
 Require Import VUtils.
 Require Import VHeap.
 Require Import RM.
 Require Import List.
 Require Import ZArith.
 Require Import RMMu.
-
+(* end hide *)
 (** * Running Programs on the R-Machine
-    To run the register machine we need a configuration. This configuration is
-    defined by the number of value, parameter and return type registers present.
-    For our examples, we define a machine with seven registers each for the 
-    value, parameter and return types.
+To run the register machine we need a configuration. This configuration is
+defined by the number of value, parameter and return type registers present.
+For our examples, we define a machine with seven registers each for the 
+value, parameter and return types.
+
 *)
-
+(* begin hide *)
 Import ListNotations.
-
 Open Scope Z_scope.
-
-(** ** Conditional Jumps, Unconditional Jumps and Arithmetic
-    Program A demonstrates basic arithmetic, %\textbf{if-then}% instruction, and 
-    the unconditional jump [goto]. 
+(* end hide *)
+(** ** Arithmetic, Conditional and Unconditional Jumps
+Program A demonstrates basic arithmetic, %\textbf{if-then}% instruction, and 
+the unconditional jump [goto]. 
 
 <<
         00 v0 = 2
@@ -35,43 +36,44 @@ Open Scope Z_scope.
         11 v2 = 9
         12 Halt
 >>
-    As a result of running this program register [v2] should contain a 
-    value of [9] as the [if] conditional evaluated to true.
-*)
+As a result of running this program register [v2] should contain a 
+value of [9] as the [if] conditional evaluated to true.
 
+*)
+(* begin hide *)
 Open Local Scope nat_scope.
 Open Local Scope string_scope.
+(* end hide *)
 Definition ctA : tCodeTable :=
     [(pair "moveRes" 11);
      (pair "end" 12)
     ].
 
 Definition programA: tRMCode :=
-    [ 
-(** 00 Entry    *)  (Const (V, 0) 2);
-(** 01          *)  (Const (V, 1) 3);
-(** 02          *)  (Add (V, 2) (V, 0) (V, 1));
-(** 03          *)  (Add (V, 3) (V, 2) (V, 1));
-(** 04          *)  (Mul (V, 4) (V, 3) (V, 3));
-(** 05          *)  (Const (V, 0) 64);
-(** 06 If v4=v0 *)  (If_eq (V, 4) (V, 0) "moveRes");
-(** 07          *)  (Const (V, 2) 6);
-(** 08          *)  (Goto "end");
-(** 09          *)  (Noop);
-(** 10          *)  (Noop);
-(** 11 moveRes  *)  (Const (V, 2) 9);
-(** 12 end      *)  (Halt)
-    ].
+[ 
+    (Const (V, 0) 2);
+    (Const (V, 1) 3);
+    (Add (V, 2) (V, 0) (V, 1));
+    (Add (V, 3) (V, 2) (V, 1));
+    (Mul (V, 4) (V, 3) (V, 3));
+    (Const (V, 0) 64);
+    (If_eq (V, 4) (V, 0) "moveRes");
+    (Const (V, 2) 6);
+    (Goto "end");
+    (Noop);
+    (Noop);
+    (Const (V, 2) 9);
+    (Halt)
+].
 Close Local Scope nat_scope.
 
 Definition machine1 := loadRM programA ctA muRM.
 
-(** 
-The entire machine is dumped at each step. This lets us verify that the 
+(** The entire machine is dumped at each step. This lets us verify that the 
 program counter is correctly incremented, and allows us to inspect the 
 register values at each step of machine execution.
-*)
 
+*)
 Eval compute in (runRM 1 machine1).
 Eval compute in (runRM 2 machine1).
 Eval compute in (runRM 3 machine1).
@@ -97,18 +99,18 @@ Eval compute in (runRM 10 machine1).
        [("move", 11%nat); ("end", 12%nat)])
      : tRMState
 >>
-    As a result of running this program, we have a value of 9 in v2.
-    Note that the value of PC is 12, which points to the [Halt] instruction. This is
-    a terminal state of the machine, the [haltState], and performing 
-    further execution will not change the machine state.
-    
-    Let us illustrate this by running the machine 10,000 times.
+As a result of running this program, we have a value of 9 in v2.
+Note that the value of PC is 12, which points to the [Halt] instruction. This is
+a terminal state of the machine, the [haltState], and performing 
+further execution will not change the machine state.
+
+Let us illustrate this by running the machine 10,000 times.
+
 *)
-
 Eval compute in (runRM 5000 machine1).
-
 (** As expected, the machine state after 10,000 steps was identical to the first 
-    time we encountered the halt instruction:
+time we encountered the halt instruction:
+
 <<
      = (([64; 3; 9; 8; 64; 0; 0], [0; 0; 0; 0; 0; 0; 0],
         [0; 0; 0; 0; 0; 0; 0]), [],
@@ -120,34 +122,35 @@ Eval compute in (runRM 5000 machine1).
        Noop; Noop; Const (V, 2%nat) 9; Halt], 12%nat, [])
      : tRMState
 >>
+
 *)
 
 (** ** Function Calls
-    In this section we demonstrate the function call mechanism in PVRM.
-    In [programB] a function [MyAdd] is defined at address [05].
-    At address [02] [MyAdd] is called with value 2 in [v0] and 3 in [v1].
-    The value returned from [MyAdd] is stored in [v2] (instruction 03),
-    followed by a jump to the [Halt] instruction at 08.
-*)
+In this section we demonstrate the function call mechanism in PVRM.
+In [programB] a function [MyAdd] is defined at address [05].
+At address [02] [MyAdd] is called with value 2 in [v0] and 3 in [v1].
+The value returned from [MyAdd] is stored in [v2] (instruction 03),
+followed by a jump to the [Halt] instruction at 08.
 
+*)
 Open Local Scope nat_scope.
 Definition ctB :=
-    [
-        (pair "myadd" 5);
-        (pair "end" 8)
-    ].
+[
+    (pair "myadd" 5);
+    (pair "end" 8)
+].
 Definition programB : tRMCode :=
-    [
-(** 00 Entry       *)  (Const (V, 0) 2);
-(** 01             *)  (Const (V, 1) 3);
-(** 02 Call MyAdd  *)  (Invoke_static [(V, 0); (V, 1)] "myadd");
-(** 03             *)  (Move_result (V, 2));
-(** 04             *)  (Goto "end");
-(** 05 myadd       *)  (Add (V, 2) (P, 0) (P, 1));
-(** 06             *)  (Ret_val (V, 2));
-(** 07             *)  (Noop);
-(** 08 end         *)  (Halt)
-    ].                   
+[
+    (Const (V, 0) 2);
+    (Const (V, 1) 3);
+    (Invoke_static [(V, 0); (V, 1)] "myadd");
+    (Move_result (V, 2));
+    (Goto "end");
+    (Add (V, 2) (P, 0) (P, 1));
+    (Ret_val (V, 2));
+    (Noop);
+    (Halt)
+].                   
 Close Local Scope nat_scope.
 
 Definition machine2 := loadRM programB ctB muRM.
@@ -163,7 +166,7 @@ Eval compute in (runRM 8 machine2).
 Eval compute in (runRM 9 machine2).
 
 (** The outcome of running this program is a value of 5 in register [v2] and the
-    value of [PC] set to 8.
+value of [PC] set to 8.
 <<
      = (([2; 3; 5; 0; 0; 0; 0], [0; 0; 0; 0; 0; 0; 0], [5; 0; 0; 0; 0; 0; 0]),
        [],
@@ -176,44 +179,43 @@ Eval compute in (runRM 9 machine2).
 >>
 
 *)
-
 (** ** Recursion
-    The next example program demonstrates the use of recursive function calls.
-    The register machine code for the factorial program is defined below. This 
-    program code is parameterized to accept an argument.
-*)
+The next example program demonstrates the use of recursive function calls.
+The register machine code for the factorial program is defined below. This 
+program code is parameterized to accept an argument.
 
+*)
 Open Local Scope nat_scope.
 Definition ctFact :=
-    [
-        (pair "fact" 10);
-        (pair "factret" 12);
-        (pair "factrec" 13);
-        (pair "end" 19)
-    ].
+[
+    (pair "fact" 10);
+    (pair "factret" 12);
+    (pair "factrec" 13);
+    (pair "end" 19)
+].
 Definition programFact (num : tRegVal) : tRMCode :=
-    [
-(* 00 *)    (Const (V, 2) num);
-(*  1 *)    (Invoke_static [(V, 2)] "fact");
-(*  2 *)    (Move_result (V, 0));
-(*  3 *)    (Goto "end");
-(*  4 *)    (Noop);
-(*  5 *)    (Noop);
-(*  6 *)    (Noop);
-(*  7 *)    (Noop);
-(*  8 *)    (Noop);
-(*  9 *)    (Noop);
-(* 10 *)    (If_gtz (P, 0) "factrec");
-(*  1 *)    (Const (V, 0) 1);
-(*  2 *)    (Ret_val (V, 0));
-(*  3 *)    (Const (V, 1) (-1));
-(*  4 *)    (Add (V, 0) (P, 0) (V, 1));
-(*  5 *)    (Invoke_static [(V, 0)] "fact");
-(*  6 *)    (Move_result (V, 0));
-(*  7 *)    (Mul (V, 0) (V, 0) (P, 0));
-(*  8 *)    (Goto "factret");
-(*  9 *)    (Halt)
-    ].
+[
+    (Const (V, 2) num);
+    (Invoke_static [(V, 2)] "fact");
+    (Move_result (V, 0));
+    (Goto "end");
+    (Noop);
+    (Noop);
+    (Noop);
+    (Noop);
+    (Noop);
+    (Noop);
+    (If_gtz (P, 0) "factrec");
+    (Const (V, 0) 1);
+    (Ret_val (V, 0));
+    (Const (V, 1) (-1));
+    (Add (V, 0) (P, 0) (V, 1));
+    (Invoke_static [(V, 0)] "fact");
+    (Move_result (V, 0));
+    (Mul (V, 0) (V, 0) (P, 0));
+    (Goto "factret");
+    (Halt)
+].
 Close Local Scope nat_scope.
 
 Definition fact7 := loadRM (programFact 7%Z) ctFact muRM.
@@ -224,7 +226,7 @@ Eval compute in (runRM 100 fact10).
 Eval compute in (runRM 1000 fact10).
 
 (** The outcome of running the factorial program for 10 leaves a value of 3628800 
-    in register [v0] and the value of [PC] set to 19.
+in register [v0] and the value of [PC] set to 19.
 <<
      = (([3628800; 0; 10; 0; 0; 0; 0], [0; 0; 0; 0; 0; 0; 0],
         [3628800; 0; 0; 0; 0; 0; 0]), [],
@@ -240,4 +242,5 @@ Eval compute in (runRM 1000 fact10).
        ("end", 19%nat)])
      : tRMState
 >>
+
 *)   
